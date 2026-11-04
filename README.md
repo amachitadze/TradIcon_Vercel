@@ -8,7 +8,7 @@
 
 - **Build Tool & Bundler:** [Vite 6](https://vitejs.dev/)
 - **პროგრამირების ენა:** Strict [TypeScript](https://www.typescriptlang.org/) (ES2022)
-- **ხელოვნური ინტელექტი:** [@google/genai SDK](https://www.npmjs.com/package/@google/genai) (Google Gemini 2.5 Flash)
+- **ხელოვნური ინტელექტი:** [@google/genai SDK](https://www.npmjs.com/package/@google/genai) (Google Gemini 3.8 Flash & Gemini 3.8 Live)
 - **მომხმარებლის ინტერფეისი:** სუფთა CSS3, თანამედროვე Glassmorphism დიზაინი, ადაპტური განლაგება (Mobile-First)
 - **PWA მხარდაჭერა:** Service Worker (`sw.js`) ქეშირების სტრატეგიით და Web App Manifest (`manifest.json`)
 - **დეპლოიმენტი:** ოპტიმიზირებულია [Vercel](https://vercel.com/)-ზე მყისიერი და უწყვეტი CI/CD გაშვებისთვის

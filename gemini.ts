@@ -122,11 +122,8 @@ Original text to polish:
 "${text}"`;
 
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.8-flash',
         contents: prompt,
-        config: {
-            thinkingConfig: { thinkingBudget: 0 }
-        }
     });
 
     return response.text;
@@ -165,12 +162,11 @@ export async function processUserChatMessage(userMessage: string): Promise<{ isC
     Your entire response MUST be a single, valid JSON object following one of the formats above. Do not add any other text.`;
 
      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.8-flash',
         contents: prompt,
         config: {
             responseMimeType: "application/json",
             responseSchema: chatProcessingSchema,
-            thinkingConfig: { thinkingBudget: 0 }
         }
     });
 
@@ -186,7 +182,7 @@ export function startChat(persona: string, history?: any[]): Chat {
     const systemInstruction = `You are a chat companion. Your personality or role is: "${persona}". You must always respond in Spanish. Keep your responses concise and conversational.`;
 
     const chat = ai.chats.create({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.8-flash',
         history: history,
         config: {
             systemInstruction: systemInstruction,
@@ -205,7 +201,7 @@ export function connectLiveChat(persona: string, callbacks: {
     const systemInstruction = `You are a chat companion. Your personality or role is: "${persona}". You must always respond in Spanish. Keep your responses concise and conversational.`;
 
     return ai.live.connect({
-        model: 'gem-2.5-flash-native-audio-preview-09-2025',
+        model: 'gemini-3.8-live',
         callbacks: callbacks,
         config: {
             responseModalities: [Modality.AUDIO],
@@ -246,12 +242,11 @@ Always return a single, valid JSON object that strictly follows the schema.`
 Always return a single, valid JSON object that strictly follows the schema.`;
 
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.8-flash',
         contents: prompt,
         config: {
             responseMimeType: "application/json",
             responseSchema: conjugatorSchema,
-            thinkingConfig: { thinkingBudget: 0 }
         }
     });
 
@@ -288,12 +283,11 @@ async function fetchOnDemandData<T>(prompt: string, schema: any): Promise<T> {
     assertApiKey();
     usageTracker.incrementRequestCount();
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.8-flash',
         contents: prompt,
         config: {
             responseMimeType: "application/json",
             responseSchema: schema,
-            thinkingConfig: { thinkingBudget: 0 }
         }
     });
 
@@ -325,12 +319,11 @@ Strictly follow the JSON schema.`
 Strictly follow the JSON schema.`;
 
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.8-flash',
         contents: prompt,
         config: {
             responseMimeType: "application/json",
             responseSchema: initialDictionarySchema,
-            thinkingConfig: { thinkingBudget: 0 }
         }
     });
 
@@ -450,11 +443,8 @@ export async function fetchImageText(base64Data: string, mimeType: string): Prom
     };
 
     const extractionResponse = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.8-flash',
         contents: { parts: [imagePart, extractionPrompt] },
-        config: {
-            thinkingConfig: { thinkingBudget: 0 }
-        }
     });
 
     return extractionResponse.text.trim();
@@ -464,11 +454,8 @@ export async function fetchTranslation(prompt: string): Promise<string> {
     assertApiKey();
     usageTracker.incrementRequestCount();
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.8-flash',
         contents: prompt,
-        config: {
-            thinkingConfig: { thinkingBudget: 0 }
-        }
     });
     return response.text;
 }

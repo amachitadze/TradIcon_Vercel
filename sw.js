@@ -3,13 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-const CACHE_NAME = 'conjugator-cache-v11';
+const CACHE_NAME = 'conjugator-cache-v12';
 const ASSETS_TO_CACHE = [
     '/',
     '/index.html',
     '/index.css',
     '/manifest.json',
-    'https://esm.sh/@google/genai@^0.14.0',
     'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap',
     'https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css',
     'https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js',
