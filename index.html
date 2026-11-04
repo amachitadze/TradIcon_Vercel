@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Conjuga verbos en español, busca en el diccionario y traduce texto con la ayuda de la inteligencia artificial de Gemini. Una herramienta completa para estudiantes y hablantes de español y georgiano.">
+    <meta name="keywords" content="conjugador español, diccionario español georgiano, traductor español georgiano, verbos en español, gramática española, aprender español, gemini api, inteligencia artificial">
+    <meta property="og:title" content="Tradicon [Ka, Es]">
+    <meta property="og:description" content="Conjuga verbos en español, busca en el diccionario y traduce texto con la ayuda de la inteligencia artificial de Gemini.">
+    <meta property="og:image" content="https://i.postimg.cc/tTP1GZL1/Tradicon-Logo-5-0.png">
+    <meta property="og:type" content="website">
+    <meta name="theme-color" content="#1d0ee2">
+    <title>Tradicon [Ka, Es]</title>
+    <link rel="stylesheet" href="/index.css">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" href="https://i.postimg.cc/PxFS9cn1/Tradicon-Favicon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
+    <script type="importmap">
+      {
+        "imports": {
+          "@google/genai": "https://esm.sh/@google/genai@^0.14.0"
+        }
+      }
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+</head>
+<body>
+    <div id="app">
+        <header>
+            <div class="header-content">
+                 <div class="header-title-wrapper">
+                    <h1 id="header-title">CONJUGADOR</h1>
+                    <div id="global-usage-bar-container"></div>
+                 </div>
+                 <button id="hamburger-btn" class="hamburger-btn" aria-label="Open menu">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"></path></svg>
+                 </button>
+                <div class="header-controls">
+                    <nav class="main-nav">
+                        <button id="nav-translator" class="nav-btn active" data-view="translator">Traductor</button>
+                        <button id="nav-dictionary" class="nav-btn" data-view="dictionary">Diccionario</button>
+                        <button id="nav-conjugator" class="nav-btn" data-view="conjugator">Conjugador</button>
+                        <button id="nav-practice" class="nav-btn" data-view="practice">Práctica</button>
+                        <button id="nav-chat" class="nav-btn" data-view="chat">Chat</button>
+                    </nav>
+                    <div class="lang-switcher">
+                        <button class="lang-btn" data-lang="es" aria-label="Cambiar a español">ES</button>
+                        <span class="lang-separator">|</span>
+                        <button class="lang-btn" data-lang="ka" aria-label="ქართულზე გადართვა">KA</button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main>
+            <form id="conjugator-form" aria-label="Formulario de conjugación de verbos">
+                <div class="input-wrapper">
+                    <div class="input-group">
+                        <label for="verb-input" class="sr-only">Verbo en español</label>
+                        <input type="text" id="verb-input" placeholder="Escribe un verbo en español..." required autocomplete="off" autocapitalize="none" spellcheck="false" aria-label="Verbo en español para conjugar">
+                         <button type="submit" id="submit-button" aria-label="Conjugar verbo">Conjugar</button>
+                    </div>
+                     <div id="mobile-submit-container"></div>
+                    <div id="autocomplete-suggestions" class="autocomplete-suggestions" hidden></div>
+                </div>
+            </form>
+            <section id="results-container" aria-live="polite">
+                <!-- App content is rendered here by TypeScript -->
+            </section>
+        </main>
+        
+        <nav id="bottom-nav">
+            <button id="bottom-nav-translator" class="bottom-nav-btn" data-view="translator">
+                <svg class="bottom-nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M9.01 14H2v2h7.01v3L13 15l-3.99-4v3zm5.98-1v-3H22V8h-7.01V5L11 9l3.99 4z"></path></svg>
+                <span id="bottom-nav-label-translator" class="bottom-nav-label">Traductor</span>
+            </button>
+             <button id="bottom-nav-dictionary" class="bottom-nav-btn" data-view="dictionary">
+                <svg class="bottom-nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z"></path></svg>
+                <span id="bottom-nav-label-dictionary" class="bottom-nav-label">Diccionario</span>
+            </button>
+            <button id="bottom-nav-conjugator" class="bottom-nav-btn" data-view="conjugator">
+                 <svg class="bottom-nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M20 6v14H6v2h14c1.1 0 2-.9 2-2V6h-2z"></path><path d="M16 2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 10H5v-2h10v2zm-1-4H5V6h10v2z"></path></svg>
+                <span id="bottom-nav-label-conjugator" class="bottom-nav-label">Conjugador</span>
+            </button>
+        </nav>
+
+        <footer>
+            <div class="footer-bottom-content">
+                 <span class="footer-decorator left"></span>
+                 <img src="https://i.postimg.cc/c1T2NJgV/avma.png" alt="AVMA Logo" class="footer-logo">
+                 <span class="footer-decorator right"></span>
+                 <div class="footer-right">
+                    <a href="https://github.com/TemuriCh/Tradicon" target="_blank" rel="noopener noreferrer" id="footer-materials-link">Auxiliary Materials</a>
+                    <span class="footer-separator">|</span>
+                    <button class="footer-link" id="footer-about-btn" data-view="about">About the app</button>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Mobile Menu -->
+    <div id="mobile-menu-overlay" class="mobile-menu-overlay" hidden></div>
+    <div id="mobile-menu" class="mobile-menu" hidden>
+        <div class="mobile-menu-header">
+            <h2>Menu</h2>
+            <button class="modal-close" aria-label="Close menu">&times;</button>
+        </div>
+        <nav class="mobile-menu-nav">
+            <ul>
+                <li><button class="mobile-menu-link mobile-menu-action-btn" data-view="practice" id="mobile-menu-practice"><span>Práctica</span></button></li>
+                <li><button class="mobile-menu-link mobile-menu-action-btn chat-btn" data-view="chat" id="mobile-menu-chat"><span>Chat</span></button></li>
+                <li><hr class="mobile-menu-separator"></li>
+                <li><button class="mobile-menu-link" id="mobile-menu-export">
+                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 9V2L10 4" stroke="#292D32" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12 2L14 4" stroke="#292D32" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path><path d="M1.97998 13H6.38998C6.76998 13 7.10998 13.21 7.27998 13.55L8.44998 15.89C8.78998 16.57 9.47998 17 10.24 17H13.77C14.53 17 15.22 16.57 15.56 15.89L16.73 13.55C16.9 13.21 17.25 13 17.62 13H21.98" stroke="#292D32" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path><path d="M7 5.12988C3.46 5.64988 2 7.72988 2 11.9999V14.9999C2 19.9999 4 21.9999 9 21.9999H15C20 21.9999 22 19.9999 22 14.9999V11.9999C22 7.72988 20.54 5.64988 17 5.12988" stroke="#292D32" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                    <span>Exportar Datos</span>
+                </button></li>
+                <li><button class="mobile-menu-link" id="mobile-menu-import">
+                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2V9L14 7" stroke="#292D32" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12 9L10 7" stroke="#292D32" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path><path d="M1.97998 13H6.38998C6.76998 13 7.10998 13.21 7.27998 13.55L8.44998 15.89C8.78998 16.57 9.47998 17 10.24 17H13.77C14.53 17 15.22 16.57 15.56 15.89L16.73 13.55C16.9 13.21 17.25 13 17.62 13H21.98" stroke="#292D32" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path><path d="M7 4.12988C3.46 4.64988 2 6.72988 2 10.9999V14.9999C2 19.9999 4 21.9999 9 21.9999H15C20 21.9999 22 19.9999 22 14.9999V10.9999C22 6.72988 20.54 4.64988 17 4.12988" stroke="#292D32" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                    <span>Importar Datos</span>
+                </button></li>
+                <li><a href="https://drive.google.com/drive/folders/1O8IKASUAdMJlqL1c5Abr-RERVARlae_z?usp=drive_link" target="_blank" rel="noopener noreferrer" class="mobile-menu-link" id="mobile-menu-drive">
+                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 22H7C3 22 2 21 2 17V7C2 3 3 2 7 2H8.5C10 2 10.33 2.44001 10.9 3.20001L12.4 5.20001C12.78 5.70001 13 6 14 6H17C21 6 22 7 22 11V13" stroke="#292D32" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path><path d="M13.7601 18.32C11.4101 18.49 11.4101 21.89 13.7601 22.06H19.3201C19.9901 22.06 20.6501 21.81 21.1401 21.36C22.7901 19.92 21.91 17.04 19.74 16.77C18.96 12.08 12.1801 13.86 13.7801 18.33" stroke="#292D32" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                    <span>Descargar desde Drive</span>
+                </a></li>
+                <li><hr class="mobile-menu-separator"></li>
+                <li><a href="https://github.com/TemuriCh/Tradicon" target="_blank" rel="noopener noreferrer" class="mobile-menu-link" id="mobile-menu-materials">
+                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M13 11L21.2 2.80005" stroke="#292D32" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path><path d="M22 6.8V2H17.2" stroke="#292D32" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path><path d="M11 2H9C4 2 2 4 2 9V15C2 20 4 22 9 22H15C20 22 22 20 22 15V13" stroke="#292D32" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                    <span>Materiales de Apoyo</span>
+                </a></li>
+                <li><button class="mobile-menu-link" data-view="about" id="mobile-menu-about">
+                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 7V17C21 20 19.5 22 16 22H8C4.5 22 3 20 3 17V7C3 4 4.5 2 8 2H16C19.5 2 21 4 21 7Z" stroke="#292D32" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path><path d="M15.5 2V9.85999C15.5 10.3 14.98 10.52 14.66 10.23L12.34 8.09003C12.15 7.91003 11.85 7.91003 11.66 8.09003L9.34003 10.23C9.02003 10.52 8.5 10.3 8.5 9.85999V2H15.5Z" stroke="#292D32" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path><path d="M13.25 14H17.5" stroke="#292D32" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path><path d="M9 18H17.5" stroke="#292D32" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                    <span>Sobre la app</span>
+                </button></li>
+            </ul>
+        </nav>
+        <div class="mobile-menu-lang-switcher">
+            <button class="mobile-menu-lang-btn" data-lang="es"><img src="https://flagcdn.com/es.svg" alt="Español"> <span id="mobile-menu-lang-es">Español</span></button>
+            <button class="mobile-menu-lang-btn" data-lang="ka"><img src="https://flagcdn.com/ge.svg" alt="ქართული"> <span id="mobile-menu-lang-ka">ქართული</span></button>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="tense-modal" class="modal-overlay" hidden>
+        <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+            <button id="modal-close-btn" class="modal-close" aria-label="Cerrar">&times;</button>
+            <div id="modal-body-content"></div>
+        </div>
+    </div>
+    
+    <div id="image-options-modal" class="modal-overlay" hidden>
+        <div class="modal-content">
+            <button class="modal-close" aria-label="Close">&times;</button>
+            <h2 id="image-modal-title">Subir Imagen</h2>
+            <div class="image-options-buttons">
+                <button id="take-photo-btn" class="image-option-btn">Tomar Foto</button>
+                <input type="file" id="image-upload-camera" accept="image/*" capture="environment" hidden>
+                <button id="from-gallery-btn" class="image-option-btn">Desde Galería</button>
+                <input type="file" id="image-upload-gallery" accept="image/*" hidden>
+                <input type="file" id="document-upload-input" hidden multiple="false" accept=".txt,.pdf,.docx">
+            </div>
+        </div>
+    </div>
+
+    <div id="cropper-modal" class="modal-overlay" hidden>
+        <div class="modal-content modal-content-cropper">
+             <button class="modal-close" aria-label="Close">&times;</button>
+             <h2 id="cropper-modal-title">Recortar Imagen</h2>
+             <div class="cropper-container">
+                <img id="cropper-image" src="" alt="Image for cropping">
+            </div>
+            <button id="crop-and-translate-btn" class="main-action-btn">Recortar y Traducir</button>
+        </div>
+    </div>
+
+    <div id="import-options-modal" class="modal-overlay" hidden>
+        <div class="modal-content">
+            <button class="modal-close">&times;</button>
+            <h2 id="import-modal-title">Opciones de Importación</h2>
+            <div class="image-options-buttons">
+                <div class="import-option">
+                    <button id="import-replace-btn" class="image-option-btn"></button>
+                    <p id="import-replace-desc" class="import-option-desc"></p>
+                </div>
+                <div class="import-option">
+                    <button id="import-merge-btn" class="image-option-btn"></button>
+                    <p id="import-merge-desc" class="import-option-desc"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="pwa-install-modal" class="modal-overlay" hidden>
+        <div class="modal-content">
+             <h2 id="pwa-install-title"></h2>
+             <p id="pwa-install-body"></p>
+             <div class="pwa-install-buttons">
+                <button id="pwa-install-decline-btn" class="pwa-install-btn pwa-install-btn--decline"></button>
+                <button id="pwa-install-confirm-btn" class="pwa-install-btn pwa-install-btn--confirm"></button>
+             </div>
+        </div>
+    </div>
+
+     <div id="alert-modal" class="modal-overlay" hidden>
+        <div class="modal-content">
+            <h2 id="alert-modal-title"></h2>
+            <p id="alert-modal-body"></p>
+            <button id="alert-modal-close-btn" class="main-action-btn"></button>
+        </div>
+    </div>
+    
+     <div id="confirm-modal" class="modal-overlay" hidden>
+        <div class="modal-content">
+            <h2 id="confirm-modal-title"></h2>
+            <p id="confirm-modal-body"></p>
+            <div class="pwa-install-buttons">
+                <button id="confirm-modal-decline-btn" class="pwa-install-btn pwa-install-btn--decline"></button>
+                <button id="confirm-modal-confirm-btn" class="pwa-install-btn pwa-install-btn--confirm"></button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="fullscreen-translation-overlay" class="fullscreen-overlay" hidden>
+        <div id="fullscreen-text-container"></div>
+        <button id="fullscreen-settings-btn" class="fullscreen-settings-btn" title="Settings">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"></path></svg>
+        </button>
+        <button id="fullscreen-close-btn" class="fullscreen-close-btn" title="Close fullscreen">&times;</button>
+        <button id="fullscreen-speak-btn" class="fullscreen-speak-btn" title="Speak text">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"></path></svg>
+        </button>
+        <div id="fullscreen-settings-panel" class="fullscreen-settings-panel" hidden>
+            <button id="fs-settings-close-btn" title="Close settings">&times;</button>
+            <div class="fs-setting-group">
+                <label for="fs-font-size-slider">Font Size: <span id="fs-font-size-value">32px</span></label>
+                <div class="fs-font-controls">
+                    <button id="fs-font-size-decrease-btn">-</button>
+                    <input type="range" id="fs-font-size-slider" min="16" max="128" value="32" step="2">
+                    <button id="fs-font-size-increase-btn">+</button>
+                </div>
+            </div>
+            <div class="fs-setting-group">
+                <label>Theme</label>
+                <div class="fs-theme-controls">
+                    <button class="fs-theme-btn" data-theme="light" title="Light"></button>
+                    <button class="fs-theme-btn" data-theme="sepia" title="Sepia"></button>
+                    <button class="fs-theme-btn" data-theme="dark" title="Dark"></button>
+                </div>
+            </div>
+            <button id="fs-rotate-screen-btn" class="fs-action-btn">Rotate Screen</button>
+        </div>
+    </div>
+
+
+    <script type="module" src="/index.tsx"></script>
+</body>
+</html>
