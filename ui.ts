@@ -16,6 +16,7 @@ import { renderTranslatorView, addTranslatorEventListeners, handleImageUpload, h
 import { renderAboutView, renderHistoryView, renderFavoritesView, addViewsEventListeners, showImportOptions } from './views.js';
 import { renderGuidelinesView } from './guidelines.js';
 import * as usageTracker from './usage-tracker.js';
+import { getApiKey, saveApiKeyToStorage } from './gemini.js';
 
 // --- View Management ---
 
@@ -212,6 +213,54 @@ export function renderApp() {
 
 // --- Delegated Event Handlers ---
 
+export function openApiSettingsModal() {
+    const modal = document.getElementById('api-settings-modal');
+    if (!modal) return;
+
+    const geminiInput = document.getElementById('gemini-key-input') as HTMLInputElement | null;
+    const groqInput = document.getElementById('groq-key-input') as HTMLInputElement | null;
+    const openrouterInput = document.getElementById('openrouter-key-input') as HTMLInputElement | null;
+
+    const geminiBadge = document.getElementById('gemini-status-badge');
+    const groqBadge = document.getElementById('groq-status-badge');
+    const openrouterBadge = document.getElementById('openrouter-status-badge');
+
+    const geminiKey = getApiKey('gemini');
+    const groqKey = getApiKey('groq');
+    const openrouterKey = getApiKey('openrouter');
+
+    const isKa = state.getCurrentLanguage() === 'ka';
+
+    const updateBadge = (badge: HTMLElement | null, key: string) => {
+        if (!badge) return;
+        if (key && key.trim()) {
+            badge.textContent = isKa ? '✅ აქტიურია' : '✅ Activo';
+            badge.style.background = '#e6f7ed';
+            badge.style.color = '#0e8a3a';
+        } else {
+            badge.textContent = isKa ? '⚠️ არ არის' : '⚠️ No configurada';
+            badge.style.background = '#fff4e5';
+            badge.style.color = '#d97706';
+        }
+    };
+
+    updateBadge(geminiBadge, geminiKey);
+    updateBadge(groqBadge, groqKey);
+    updateBadge(openrouterBadge, openrouterKey);
+
+    if (geminiInput) geminiInput.value = localStorage.getItem('GEMINI_API_KEY') || '';
+    if (groqInput) groqInput.value = localStorage.getItem('GROQ_API_KEY') || '';
+    if (openrouterInput) openrouterInput.value = localStorage.getItem('OPENROUTER_API_KEY') || '';
+
+    modal.hidden = false;
+    toggleMobileMenu(true);
+}
+
+export function closeApiSettingsModal() {
+    const modal = document.getElementById('api-settings-modal');
+    if (modal) modal.hidden = true;
+}
+
 export function addDelegatedEventListeners() {
     addConjugatorEventListeners();
     addDictionaryEventListeners();
@@ -219,6 +268,49 @@ export function addDelegatedEventListeners() {
     addChatDelegatedEventListeners();
     addPracticeDelegatedEventListeners();
     addViewsEventListeners();
+
+    // Global listener for API settings modal buttons and error triggers
+    document.body.addEventListener('click', (e) => {
+        const target = e.target as HTMLElement;
+        if (target.closest('.open-api-settings-btn, #mobile-menu-api-settings')) {
+            openApiSettingsModal();
+            return;
+        }
+        if (target.matches('#api-settings-close-btn') || (target.id === 'api-settings-modal' && e.target === target)) {
+            closeApiSettingsModal();
+            return;
+        }
+        if (target.matches('#api-settings-save-btn')) {
+            const geminiInput = document.getElementById('gemini-key-input') as HTMLInputElement | null;
+            const groqInput = document.getElementById('groq-key-input') as HTMLInputElement | null;
+            const openrouterInput = document.getElementById('openrouter-key-input') as HTMLInputElement | null;
+
+            if (geminiInput) saveApiKeyToStorage('gemini', geminiInput.value.trim());
+            if (groqInput) saveApiKeyToStorage('groq', groqInput.value.trim());
+            if (openrouterInput) saveApiKeyToStorage('openrouter', openrouterInput.value.trim());
+
+            closeApiSettingsModal();
+            const isKa = state.getCurrentLanguage() === 'ka';
+            utils.showAlertModal(
+                isKa ? "პარამეტრები შენახულია" : "Configuración Guardada",
+                isKa ? "API გასაღებები წარმატებით შეინახა ბრაუზერში!" : "¡Las claves API se guardaron correctamente en el navegador!"
+            );
+            return;
+        }
+        if (target.matches('#api-settings-clear-btn')) {
+            saveApiKeyToStorage('gemini', '');
+            saveApiKeyToStorage('groq', '');
+            saveApiKeyToStorage('openrouter', '');
+            const geminiInput = document.getElementById('gemini-key-input') as HTMLInputElement | null;
+            const groqInput = document.getElementById('groq-key-input') as HTMLInputElement | null;
+            const openrouterInput = document.getElementById('openrouter-key-input') as HTMLInputElement | null;
+            if (geminiInput) geminiInput.value = '';
+            if (groqInput) groqInput.value = '';
+            if (openrouterInput) openrouterInput.value = '';
+            openApiSettingsModal(); // refresh badges
+            return;
+        }
+    });
 
     // The container is static, so we can add a direct listener here.
     const globalUsageBar = document.getElementById('global-usage-bar-container');

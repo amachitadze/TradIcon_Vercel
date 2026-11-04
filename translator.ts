@@ -342,12 +342,21 @@ async function translateText(sourceHtml: string) {
         const errorString = (error instanceof Error) ? error.message : JSON.stringify(error);
         let displayMessage;
 
-        if (errorString.includes('500') || errorString.includes('UNKNOWN') || errorString.includes('server')) {
+        if (errorString.includes('503') || errorString.includes('UNAVAILABLE') || errorString.includes('high demand') || errorString.includes('overloaded')) {
+            displayMessage = state.getCurrentLanguage() === 'ka'
+                ? "სერვერები გადატვირთულია მაღალი მოთხოვნის გამო (503 High Demand). თუ Gemini არ პასუხობს, დაამატეთ უფასო Groq გასაღები პარამეტრებში მომენტალური (0.2 წმ) პასუხისთვის."
+                : "El servidor de IA está temporalmente sobrecargado (503). Configure una clave de Groq para failover instantáneo.";
+        } else if (errorString.includes('500') || errorString.includes('UNKNOWN') || errorString.includes('server')) {
             displayMessage = t.errorServer;
         } else {
             displayMessage = errorString || t.errorDefault;
         }
-        targetDiv.innerHTML = `<p class="error-message">${t.errorPrefix}: ${displayMessage}</p>`;
+        targetDiv.innerHTML = `
+            <div class="error-container" style="text-align: center; padding: 1rem;">
+                <p class="error-message">${t.errorPrefix}: ${displayMessage}</p>
+                <button type="button" class="open-api-settings-btn" style="margin-top: 0.75rem; padding: 0.45rem 1rem; background: var(--primary-color); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 0.85rem; font-weight: 600;">⚙️ ${state.getCurrentLanguage() === 'ka' ? 'API გასაღებების მართვა' : 'Configurar Claves API'}</button>
+            </div>
+        `;
     } finally {
         translateButton.disabled = false;
         translateButton.textContent = t.translateButton;

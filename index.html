@@ -127,7 +127,9 @@
                 </a></li>
                 <li><button class="mobile-menu-link" data-view="about" id="mobile-menu-about">
                     <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 7V17C21 20 19.5 22 16 22H8C4.5 22 3 20 3 17V7C3 4 4.5 2 8 2H16C19.5 2 21 4 21 7Z" stroke="#292D32" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path><path d="M15.5 2V9.85999C15.5 10.3 14.98 10.52 14.66 10.23L12.34 8.09003C12.15 7.91003 11.85 7.91003 11.66 8.09003L9.34003 10.23C9.02003 10.52 8.5 10.3 8.5 9.85999V2H15.5Z" stroke="#292D32" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path><path d="M13.25 14H17.5" stroke="#292D32" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path><path d="M9 18H17.5" stroke="#292D32" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path></svg>
-                    <span>Sobre la app</span>
+                <li><button class="mobile-menu-link" id="mobile-menu-api-settings">
+                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 2l-2 2m-1.5 6.5l3-3a2.121 2.121 0 0 0-3-3l-3 3 4.5 4.5zM11 11l-7 7v4h4l7-7-4-4z" stroke="#292D32" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                    <span id="mobile-menu-api-keys-label">API გასაღებები</span>
                 </button></li>
             </ul>
         </nav>
@@ -248,6 +250,47 @@
         </div>
     </div>
 
+    <!-- API Settings Modal -->
+    <div id="api-settings-modal" class="modal-overlay" hidden>
+        <div class="modal-content" style="max-width: 480px; width: 92%;">
+            <button id="api-settings-close-btn" class="modal-close" aria-label="Close">&times;</button>
+            <h2 id="api-settings-title" style="margin-bottom: 0.5rem; font-size: 1.3rem;">API გასაღებების მართვა</h2>
+            <p id="api-settings-subtitle" style="font-size: 0.85rem; color: #555; margin-bottom: 1.25rem; line-height: 1.4;">
+                თუ Gemini გადატვირთულია (503 High Demand), სისტემა <b>წამების მეასედში</b> ავტომატურად გადადის Groq (Llama 3.3) ან OpenRouter-ზე.
+            </p>
+
+            <div style="display: flex; flex-direction: column; gap: 1rem;">
+                <div class="api-key-field">
+                    <div style="font-weight: 600; font-size: 0.85rem; display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                        <span>Google Gemini Key</span>
+                        <span id="gemini-status-badge" style="font-size: 0.75rem; padding: 2px 6px; border-radius: 4px; background: #eef; color: #33a;">შემოწმება...</span>
+                    </div>
+                    <input type="password" id="gemini-key-input" placeholder="AIzaSy... (ან Vercel Env)" style="width: 100%; padding: 0.55rem; border-radius: 8px; border: 1px solid #ccc; font-family: monospace; font-size: 0.85rem; box-sizing: border-box;">
+                </div>
+
+                <div class="api-key-field">
+                    <div style="font-weight: 600; font-size: 0.85rem; display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                        <span>Groq Key (რეკომენდებული - 0.2 წმ)</span>
+                        <span id="groq-status-badge" style="font-size: 0.75rem; padding: 2px 6px; border-radius: 4px; background: #eef; color: #33a;">შემოწმება...</span>
+                    </div>
+                    <input type="password" id="groq-key-input" placeholder="gsk_... (უფასო console.groq.com/keys)" style="width: 100%; padding: 0.55rem; border-radius: 8px; border: 1px solid #ccc; font-family: monospace; font-size: 0.85rem; box-sizing: border-box;">
+                </div>
+
+                <div class="api-key-field">
+                    <div style="font-weight: 600; font-size: 0.85rem; display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                        <span>OpenRouter Key</span>
+                        <span id="openrouter-status-badge" style="font-size: 0.75rem; padding: 2px 6px; border-radius: 4px; background: #eef; color: #33a;">შემოწმება...</span>
+                    </div>
+                    <input type="password" id="openrouter-key-input" placeholder="sk-or-... (openrouter.ai/keys)" style="width: 100%; padding: 0.55rem; border-radius: 8px; border: 1px solid #ccc; font-family: monospace; font-size: 0.85rem; box-sizing: border-box;">
+                </div>
+
+                <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
+                    <button type="button" id="api-settings-save-btn" class="main-action-btn" style="flex: 1; padding: 0.65rem; background: var(--primary-color); color: #fff; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">შენახვა</button>
+                    <button type="button" id="api-settings-clear-btn" class="main-action-btn" style="padding: 0.65rem 1rem; background: #eee; color: #333; border: none; border-radius: 8px; font-weight: 500; cursor: pointer;">გასუფთავება</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script type="module" src="/index.tsx"></script>
 </body>

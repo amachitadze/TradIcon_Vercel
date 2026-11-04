@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-const CACHE_NAME = 'conjugator-cache-v12';
+const CACHE_NAME = 'tradicon-network-first-v14';
 const ASSETS_TO_CACHE = [
     '/',
     '/index.html',
@@ -17,78 +17,62 @@ const ASSETS_TO_CACHE = [
     'https://i.postimg.cc/PxFS9cn1/Tradicon-Favicon.png'
 ];
 
-// Install event: cache the application shell
+// Install event: cache application shell and activate immediately
 self.addEventListener('install', event => {
+    self.skipWaiting(); // მომენტალური გააქტიურება
     event.waitUntil(
         caches.open(CACHE_NAME)
-            .then(cache => {
-                console.log('Opened cache');
-                return cache.addAll(ASSETS_TO_CACHE);
-            })
-            .catch(err => {
-                console.error('Failed to open cache and add assets:', err);
-            })
+            .then(cache => cache.addAll(ASSETS_TO_CACHE))
+            .catch(err => console.error('Failed to pre-cache assets:', err))
     );
 });
 
-// Fetch event: serve from cache, fall back to network, and cache new assets
-self.addEventListener('fetch', event => {
-    // We only want to handle GET requests.
-    if (event.request.method !== 'GET') {
-        return;
-    }
-    
-    // For API calls (or other resources we don't want to cache), fetch from network.
-    // Example: if (event.request.url.includes('api.example.com')) { ... }
-    
-    event.respondWith(
-        caches.open(CACHE_NAME).then(cache => {
-            return cache.match(event.request).then(response => {
-                // If the resource is in the cache, serve it.
-                if (response) {
-                    return response;
-                }
-
-                // If the resource is not in the cache, fetch it from the network.
-                return fetch(event.request).then(networkResponse => {
-                    // Check if we received a valid response
-                    if (networkResponse && networkResponse.status === 200) {
-                        // IMPORTANT: Clone the response. A response is a stream
-                        // and because we want the browser to consume the response
-                        // as well as the cache consuming the response, we need
-                        // to clone it so we have two streams.
-                        const responseToCache = networkResponse.clone();
-                        
-                        // Cache the fetched resource.
-                        cache.put(event.request, responseToCache);
-                    }
-                    
-                    return networkResponse;
-                });
-            }).catch(error => {
-                // This will be triggered if both cache and network fail.
-                console.error('Fetch failed; returning offline page instead.', error);
-                // Optionally, return a fallback offline page.
-                // return caches.match('/offline.html');
-            });
-        })
-    );
-});
-
-
-// Activate event: clean up old caches
+// Activate event: clean up all old caches and claim clients immediately
 self.addEventListener('activate', event => {
-    const cacheWhitelist = [CACHE_NAME];
     event.waitUntil(
         caches.keys().then(cacheNames => {
             return Promise.all(
                 cacheNames.map(cacheName => {
-                    if (cacheWhitelist.indexOf(cacheName) === -1) {
-                        console.log('Deleting old cache:', cacheName);
+                    if (cacheName !== CACHE_NAME) {
+                        console.log('ძველი ქეშის წაშლა:', cacheName);
                         return caches.delete(cacheName);
                     }
                 })
             );
-        })
+        }).then(() => self.clients.claim())
+    );
+});
+
+// Fetch event: NETWORK-FIRST სტრატეგია
+// ყოველთვის ჯერ ქსელიდან (Vercel-დან) მოაქვს უახლესი ვერსია, ხოლო ოფლაინ რეჟიმში იყენებს ქეშს
+self.addEventListener('fetch', event => {
+    if (event.request.method !== 'GET') {
+        return;
+    }
+
+    const requestUrl = new URL(event.request.url);
+
+    // API მოთხოვნებს (Groq, OpenRouter, Google) არასდროს ვკეშირებთ
+    if (requestUrl.hostname.includes('googleapis.com') ||
+        requestUrl.hostname.includes('groq.com') ||
+        requestUrl.hostname.includes('openrouter.ai')) {
+        return;
+    }
+
+    event.respondWith(
+        fetch(event.request)
+            .then(networkResponse => {
+                if (networkResponse && networkResponse.status === 200) {
+                    const responseClone = networkResponse.clone();
+                    caches.open(CACHE_NAME).then(cache => {
+                        cache.put(event.request, responseClone);
+                    });
+                }
+                return networkResponse;
+            })
+            .catch(() => {
+                // თუ ქსელი გათიშულია, ვუბრუნებთ ქეშირებულ ვერსიას
+                return caches.match(event.request);
+            })
     );
 });

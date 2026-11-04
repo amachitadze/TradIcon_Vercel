@@ -1,36 +1,107 @@
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
-*/
+ */
 import { GoogleGenAI, Type, Chat, Modality, LiveServerMessage } from '@google/genai';
 import { Language } from './types.js';
 import * as usageTracker from './usage-tracker.js';
 
-// --- Multi-Provider AI Initialization ---
-const resolvedApiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || '';
-const groqApiKey = process.env.GROQ_API_KEY || '';
-const openRouterApiKey = process.env.OPENROUTER_API_KEY || '';
+// --- Multi-Provider Key Resolution (Dynamic & Tree-Shaking Immune) ---
 
-export function assertApiKey(): void {
-    const hasAnyKey = (resolvedApiKey && resolvedApiKey.trim().length > 0) ||
-                      (groqApiKey && groqApiKey.trim().length > 0) ||
-                      (openRouterApiKey && openRouterApiKey.trim().length > 0);
-    if (!hasAnyKey) {
-        throw new Error("AI API გასაღები (GEMINI_API_KEY, GROQ_API_KEY ან OPENROUTER_API_KEY) არ არის კონფიგურირებული. გთხოვთ, მიუთითოთ ის Vercel Settings > Environment Variables-ში ან .env.local ფაილში.");
+export function getApiKey(provider: 'gemini' | 'groq' | 'openrouter'): string {
+    // 1. Check window.__TRADICON_ENV__ (injected via Vite define at build time)
+    if (typeof window !== 'undefined') {
+        const win = window as any;
+        if (win.__TRADICON_ENV__) {
+            if (provider === 'gemini' && win.__TRADICON_ENV__.GEMINI_API_KEY) {
+                const k = String(win.__TRADICON_ENV__.GEMINI_API_KEY).trim();
+                if (k) return k;
+            }
+            if (provider === 'groq' && win.__TRADICON_ENV__.GROQ_API_KEY) {
+                const k = String(win.__TRADICON_ENV__.GROQ_API_KEY).trim();
+                if (k) return k;
+            }
+            if (provider === 'openrouter' && win.__TRADICON_ENV__.OPENROUTER_API_KEY) {
+                const k = String(win.__TRADICON_ENV__.OPENROUTER_API_KEY).trim();
+                if (k) return k;
+            }
+        }
+    }
+
+    // 2. Check process.env runtime replacements
+    try {
+        if (provider === 'gemini') {
+            const k = process.env.GEMINI_API_KEY || process.env.API_KEY;
+            if (k && String(k).trim()) return String(k).trim();
+        } else if (provider === 'groq') {
+            const k = process.env.GROQ_API_KEY;
+            if (k && String(k).trim()) return String(k).trim();
+        } else if (provider === 'openrouter') {
+            const k = process.env.OPENROUTER_API_KEY;
+            if (k && String(k).trim()) return String(k).trim();
+        }
+    } catch {}
+
+    // 3. Check localStorage (მომხმარებლის მიერ ბრაუზერში შენახული გასაღებები)
+    if (typeof window !== 'undefined') {
+        try {
+            if (provider === 'gemini') {
+                const ls = localStorage.getItem('GEMINI_API_KEY') || localStorage.getItem('VITE_GEMINI_API_KEY') || localStorage.getItem('API_KEY');
+                if (ls && ls.trim()) return ls.trim();
+            } else if (provider === 'groq') {
+                const ls = localStorage.getItem('GROQ_API_KEY') || localStorage.getItem('VITE_GROQ_API_KEY');
+                if (ls && ls.trim()) return ls.trim();
+            } else if (provider === 'openrouter') {
+                const ls = localStorage.getItem('OPENROUTER_API_KEY') || localStorage.getItem('VITE_OPENROUTER_API_KEY');
+                if (ls && ls.trim()) return ls.trim();
+            }
+        } catch {}
+    }
+
+    return '';
+}
+
+export function saveApiKeyToStorage(provider: 'gemini' | 'groq' | 'openrouter', value: string): void {
+    if (typeof window === 'undefined') return;
+    try {
+        const key = provider === 'gemini' ? 'GEMINI_API_KEY' : provider === 'groq' ? 'GROQ_API_KEY' : 'OPENROUTER_API_KEY';
+        if (value && value.trim()) {
+            localStorage.setItem(key, value.trim());
+        } else {
+            localStorage.removeItem(key);
+        }
+    } catch (e) {
+        console.error("Failed to save API key to localStorage:", e);
     }
 }
 
-const ai = new GoogleGenAI({ apiKey: resolvedApiKey || 'unconfigured' });
+export function assertApiKey(): void {
+    const hasGemini = Boolean(getApiKey('gemini'));
+    const hasGroq = Boolean(getApiKey('groq'));
+    const hasOpenRouter = Boolean(getApiKey('openrouter'));
+
+    if (!hasGemini && !hasGroq && !hasOpenRouter) {
+        throw new Error("AI API გასაღები (GEMINI_API_KEY, GROQ_API_KEY ან OPENROUTER_API_KEY) არ არის კონფიგურირებული. გთხოვთ მიუთითოთ ის Vercel Settings-ში ან აპლიკაციის პარამეტრებში.");
+    }
+}
+
+let cachedGenAI: GoogleGenAI | null = null;
+let lastUsedGeminiKey = '';
+
+function getGoogleGenAI(): GoogleGenAI {
+    const key = getApiKey('gemini') || 'unconfigured';
+    if (!cachedGenAI || lastUsedGeminiKey !== key) {
+        cachedGenAI = new GoogleGenAI({ apiKey: key });
+        lastUsedGeminiKey = key;
+    }
+    return cachedGenAI;
+}
 
 interface AiExecuteOptions {
     prompt: string;
     systemInstruction?: string;
     schema?: any;
     isJson?: boolean;
-}
-
-function sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 export function isServiceUnavailableError(error: any): boolean {
@@ -44,6 +115,7 @@ export function isServiceUnavailableError(error: any): boolean {
 }
 
 async function callGemini(model: string, options: AiExecuteOptions): Promise<string> {
+    const ai = getGoogleGenAI();
     const config: any = {};
     if (options.systemInstruction) {
         config.systemInstruction = options.systemInstruction;
@@ -67,19 +139,31 @@ async function callGemini(model: string, options: AiExecuteOptions): Promise<str
     return response.text;
 }
 
-async function callGroq(options: AiExecuteOptions): Promise<string> {
-    if (!groqApiKey || groqApiKey.trim() === '') {
+async function callGroq(options: AiExecuteOptions, key: string): Promise<string> {
+    if (!key || key.trim() === '') {
         throw new Error("GROQ_API_KEY არ არის კონფიგურირებული.");
     }
 
     let userPrompt = options.prompt;
-    if (options.isJson || options.schema) {
+    const isJsonMode = Boolean(options.isJson || options.schema);
+
+    if (isJsonMode) {
         userPrompt += "\n\nCRITICAL: Respond ONLY with a valid, raw JSON object matching the requested schema. Do NOT wrap in markdown formatting (no ```json).";
     }
 
-    const messages = [];
-    if (options.systemInstruction) {
-        messages.push({ role: 'system', content: options.systemInstruction });
+    const messages: Array<{ role: 'system' | 'user'; content: string }> = [];
+
+    // Groq requires that if response_format: { type: "json_object" } is used,
+    // the messages MUST explicitly contain the word "json"
+    let systemText = options.systemInstruction || '';
+    if (isJsonMode) {
+        systemText = systemText
+            ? `${systemText} You must output valid JSON.`
+            : "You are a helpful assistant that outputs valid JSON.";
+    }
+
+    if (systemText) {
+        messages.push({ role: 'system', content: systemText });
     }
     messages.push({ role: 'user', content: userPrompt });
 
@@ -87,13 +171,14 @@ async function callGroq(options: AiExecuteOptions): Promise<string> {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${groqApiKey.trim()}`
+            'Authorization': `Bearer ${key.trim()}`
         },
         body: JSON.stringify({
             model: 'llama-3.3-70b-versatile',
             messages,
-            response_format: (options.isJson || options.schema) ? { type: 'json_object' } : undefined,
-            temperature: 0.2
+            response_format: isJsonMode ? { type: 'json_object' } : undefined,
+            temperature: 0.1,
+            max_tokens: 4096
         })
     });
 
@@ -110,19 +195,28 @@ async function callGroq(options: AiExecuteOptions): Promise<string> {
     return content;
 }
 
-async function callOpenRouter(options: AiExecuteOptions): Promise<string> {
-    if (!openRouterApiKey || openRouterApiKey.trim() === '') {
+async function callOpenRouter(options: AiExecuteOptions, key: string): Promise<string> {
+    if (!key || key.trim() === '') {
         throw new Error("OPENROUTER_API_KEY არ არის კონფიგურირებული.");
     }
 
     let userPrompt = options.prompt;
-    if (options.isJson || options.schema) {
+    const isJsonMode = Boolean(options.isJson || options.schema);
+
+    if (isJsonMode) {
         userPrompt += "\n\nCRITICAL: Respond ONLY with a valid, raw JSON object matching the requested schema. Do NOT wrap in markdown formatting (no ```json).";
     }
 
-    const messages = [];
-    if (options.systemInstruction) {
-        messages.push({ role: 'system', content: options.systemInstruction });
+    const messages: Array<{ role: 'system' | 'user'; content: string }> = [];
+    let systemText = options.systemInstruction || '';
+    if (isJsonMode) {
+        systemText = systemText
+            ? `${systemText} You must output valid JSON.`
+            : "You are a helpful assistant that outputs valid JSON.";
+    }
+
+    if (systemText) {
+        messages.push({ role: 'system', content: systemText });
     }
     messages.push({ role: 'user', content: userPrompt });
 
@@ -130,15 +224,15 @@ async function callOpenRouter(options: AiExecuteOptions): Promise<string> {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${openRouterApiKey.trim()}`,
+            'Authorization': `Bearer ${key.trim()}`,
             'HTTP-Referer': 'https://tradicon.vercel.app',
             'X-Title': 'Tradicon'
         },
         body: JSON.stringify({
             model: 'meta-llama/llama-3.3-70b-instruct:free',
             messages,
-            response_format: (options.isJson || options.schema) ? { type: 'json_object' } : undefined,
-            temperature: 0.2
+            response_format: isJsonMode ? { type: 'json_object' } : undefined,
+            temperature: 0.1
         })
     });
 
@@ -155,74 +249,100 @@ async function callOpenRouter(options: AiExecuteOptions): Promise<string> {
     return content;
 }
 
+/**
+ * ასრულებს AI მოთხოვნას მრავალპროვაიდერიანი კასკადით (Gemini -> Groq -> OpenRouter -> Gemini Lite).
+ * გადართვა ხდება მომენტალურად (0 წამში), ყოველგვარი დაყოვნების გარეშე.
+ */
 export async function executeAiWithFallback(options: AiExecuteOptions): Promise<string> {
     assertApiKey();
     const errors: string[] = [];
 
-    // 1. პირველი მცდელობა: Google Gemini 3.8 Flash
-    if (resolvedApiKey && resolvedApiKey.trim() !== '') {
+    const geminiKey = getApiKey('gemini');
+    const groqKey = getApiKey('groq');
+    const openRouterKey = getApiKey('openrouter');
+
+    // 1. მცდელობა 1: Google Gemini 3.8 Flash
+    if (geminiKey) {
         try {
             return await callGemini('gemini-3.8-flash', options);
         } catch (err: any) {
-            console.warn("Gemini 3.8 Flash შეფერხება:", err?.message || err);
-            errors.push(`Gemini 3.8 Flash: ${err?.message || err}`);
-
-            // თუ შეცდომა გადატვირთვაა (503/429), დავიცადოთ ცოტა
-            if (isServiceUnavailableError(err)) {
-                await sleep(500);
-            }
+            const errStr = String(err?.message || err || '');
+            console.warn("Gemini 3.8 Flash შეფერხება:", errStr);
+            errors.push(`Gemini 3.8 Flash: ${errStr}`);
+            // თუ შეცდომა გადატვირთვაა (503/429/high demand), დაუყოვნებლივ გადავდივართ 0ms-ში Groq-ზე!
         }
+    }
 
-        // 2. მეორე მცდელობა: Google Gemini 3.1 Flash-Lite (ალტერნატიული მსუბუქი მოდელი)
+    // 2. მცდელობა 2: Groq LPU (Llama 3.3 70B - წამების მეასედებში პასუხი)
+    if (groqKey) {
+        try {
+            console.log("მომენტალური ფოლბექი (0ms): გადართვა Groq LPU (Llama 3.3 70B)-ზე...");
+            return await callGroq(options, groqKey);
+        } catch (err: any) {
+            const errStr = String(err?.message || err || '');
+            console.warn("Groq შეფერხება:", errStr);
+            errors.push(`Groq LPU: ${errStr}`);
+        }
+    }
+
+    // 3. მცდელობა 3: OpenRouter
+    if (openRouterKey) {
+        try {
+            console.log("მომენტალური ფოლბექი: გადართვა OpenRouter-ზე...");
+            return await callOpenRouter(options, openRouterKey);
+        } catch (err: any) {
+            const errStr = String(err?.message || err || '');
+            console.warn("OpenRouter შეფერხება:", errStr);
+            errors.push(`OpenRouter: ${errStr}`);
+        }
+    }
+
+    // 4. მცდელობა 4: Google Gemini 3.1 Flash-Lite (მსუბუქი ალტერნატივა)
+    if (geminiKey) {
         try {
             console.log("ფოლბექი: გადართვა Gemini 3.1 Flash-Lite-ზე...");
             return await callGemini('gemini-3.1-flash-lite', options);
         } catch (err: any) {
-            console.warn("Gemini 3.1 Flash-Lite შეფერხება:", err?.message || err);
-            errors.push(`Gemini 3.1 Flash-Lite: ${err?.message || err}`);
-        }
-    }
-
-    // 3. მესამე მცდელობა: Groq (Llama 3.3 70B Versatile - ულტრა-სწრაფი LPU)
-    if (groqApiKey && groqApiKey.trim() !== '') {
-        try {
-            console.log("ფოლბექი: გადართვა Groq (Llama 3.3 70B)-ზე...");
-            return await callGroq(options);
-        } catch (err: any) {
-            console.warn("Groq შეფერხება:", err?.message || err);
-            errors.push(`Groq: ${err?.message || err}`);
-        }
-    }
-
-    // 4. მეოთხე მცდელობა: OpenRouter Free Models
-    if (openRouterApiKey && openRouterApiKey.trim() !== '') {
-        try {
-            console.log("ფოლბექი: გადართვა OpenRouter-ზე...");
-            return await callOpenRouter(options);
-        } catch (err: any) {
-            console.warn("OpenRouter შეფერხება:", err?.message || err);
-            errors.push(`OpenRouter: ${err?.message || err}`);
+            const errStr = String(err?.message || err || '');
+            console.warn("Gemini 3.1 Flash-Lite შეფერხება:", errStr);
+            errors.push(`Gemini 3.1 Flash-Lite: ${errStr}`);
         }
     }
 
     // თუ ყველა პროვაიდერი ჩავარდა
     console.error("ყველა AI პროვაიდერი ჩავარდა:", errors);
-    throw new Error("სერვერები ამჟამად გადატვირთულია მაღალი მოთხოვნის გამო (503 High Demand). გთხოვთ, სცადოთ ხელახლა რამდენიმე წამში.");
+
+    let helpMsg = "სერვერები ამჟამად გადატვირთულია მაღალი მოთხოვნის გამო (503 High Demand).";
+    if (!groqKey && !openRouterKey) {
+        helpMsg += " 💡 რჩევა: დაამატეთ უფასო GROQ_API_KEY Vercel-ში ან პარამეტრებში დაუყოვნებელი (0.2 წმ) პასუხისთვის!";
+    }
+    throw new Error(helpMsg);
 }
 
 // --- Helper for Robust JSON Parsing ---
 function sanitizeAndParseJson(text: string): any {
-    // The API might sometimes wrap the JSON in ```json ... ```.
-    // This regex extracts the content inside.
-    const match = text.match(/```(?:json)?\s*([\sS]*?)\s*```/);
-    const jsonText = match ? match[1] : text;
+    if (!text || typeof text !== 'string') {
+        throw new Error("ცარიელი პასუხი AI-სგან.");
+    }
+
+    let cleaned = text.trim();
+    // Regex matches any markdown code block with dotAll pattern [\s\S]*?
+    const match = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    if (match && match[1]) {
+        cleaned = match[1].trim();
+    } else {
+        const firstBrace = cleaned.indexOf('{');
+        const lastBrace = cleaned.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+            cleaned = cleaned.substring(firstBrace, lastBrace + 1);
+        }
+    }
 
     try {
-        return JSON.parse(jsonText);
+        return JSON.parse(cleaned);
     } catch (error) {
-        console.error("Failed to parse JSON response from AI:", { originalText: text, extractedText: jsonText, error });
-        // Throw a user-friendly error if parsing fails.
-        throw new Error("The AI returned a response that could not be understood. Please try again.");
+        console.error("Failed to parse JSON response from AI:", { originalText: text, cleaned, error });
+        throw new Error("AI-სგან მიღებული მონაცემების დამუშავება ვერ მოხერხდა (JSON პარსინგის შეცდომა). გთხოვთ, სცადოთ ხელახლა.");
     }
 }
 
@@ -294,7 +414,7 @@ const initialDictionarySchema = {
 export async function polishText(text: string, lang: string, tone: string, showChanges: boolean): Promise<string> {
     assertApiKey();
     usageTracker.incrementRequestCount();
-    
+
     const langName = lang === 'es' ? 'Spanish' : 'Georgian';
 
     const changeInstruction = showChanges
@@ -321,7 +441,6 @@ Original text to polish:
 
     return rawText;
 }
-
 
 export async function processUserChatMessage(userMessage: string): Promise<{ isCorrection: boolean; finalText: string; originalText?: string; explanation?: string; }> {
     assertApiKey();
@@ -354,18 +473,19 @@ export async function processUserChatMessage(userMessage: string): Promise<{ isC
 
     Your entire response MUST be a single, valid JSON object following one of the formats above. Do not add any other text.`;
 
-     const rawText = await executeAiWithFallback({
+    const rawText = await executeAiWithFallback({
         prompt,
         schema: chatProcessingSchema,
         isJson: true
     });
-    
+
     return sanitizeAndParseJson(rawText);
 }
 
 export function startChat(persona: string, history?: any[]): Chat {
     assertApiKey();
     const systemInstruction = `You are a chat companion. Your personality or role is: "${persona}". You must always respond in Spanish. Keep your responses concise and conversational.`;
+    const ai = getGoogleGenAI();
 
     const chat = ai.chats.create({
         model: 'gemini-3.8-flash',
@@ -385,6 +505,7 @@ export function connectLiveChat(persona: string, callbacks: {
 }) {
     assertApiKey();
     const systemInstruction = `You are a chat companion. Your personality or role is: "${persona}". You must always respond in Spanish. Keep your responses concise and conversational.`;
+    const ai = getGoogleGenAI();
 
     return ai.live.connect({
         model: 'gemini-3.8-live',
@@ -437,24 +558,21 @@ Always return a single, valid JSON object that strictly follows the schema.`;
 
     // If an error field is present in the response, we treat it as an error.
     if (data && 'error' in data) {
-        // If the error value is a non-empty string and not the literal string "null", use it as the message.
         if (typeof data.error === 'string' && data.error.trim().length > 0 && data.error.trim().toLowerCase() !== 'null') {
             throw new Error(data.error);
         }
-        // Otherwise, throw a generic error.
-        console.error("Received unhelpful or null error response from Gemini:", data);
-        throw new Error("The AI returned an error. Please try again.");
+        console.error("Received unhelpful or null error response from AI:", data);
+        throw new Error("AI-მ დააბრუნა გაურკვეველი შეცდომა. გთხოვთ სცადოთ ხელახლა.");
     }
 
     // If no error field, validate essential data.
     if (!data?.infinitivo || !data?.presente) {
-        console.error("Incomplete response from Gemini:", data);
-        throw new Error("The AI returned an incomplete or invalid response. Please try again.");
+        console.error("Incomplete response from AI:", data);
+        throw new Error("AI-მ დააბრუნა არასრული პასუხი. გთხოვთ სცადოთ ხელახლა.");
     }
-    
+
     return data;
 }
-
 
 // --- On-Demand Dictionary Functions ---
 
@@ -469,7 +587,6 @@ async function fetchOnDemandData<T>(prompt: string, schema: any): Promise<T> {
 
     return sanitizeAndParseJson(rawText);
 }
-
 
 export async function fetchInitialWordDefinition(word: string, lang: Language): Promise<any> {
     assertApiKey();
@@ -502,8 +619,8 @@ Strictly follow the JSON schema.`;
         throw new Error(data.error);
     }
     if (!data?.palabra || !data?.definicion) {
-        console.error("Incomplete initial response from Gemini:", data);
-        throw new Error("The AI returned an incomplete or invalid response. Please try again.");
+        console.error("Incomplete initial response from AI:", data);
+        throw new Error("AI-მ დააბრუნა არასრული განმარტება. გთხოვთ სცადოთ ხელახლა.");
     }
     return data;
 }
@@ -594,7 +711,6 @@ export async function fetchDerivedAdjective(word: string, lang: Language): Promi
     return await fetchOnDemandData<{ adjetivo: string; definicion_adjetivo: string; }>(prompt, schema);
 }
 
-
 export async function fetchImageText(base64Data: string, mimeType: string): Promise<string> {
     assertApiKey();
     usageTracker.incrementRequestCount();
@@ -607,6 +723,7 @@ export async function fetchImageText(base64Data: string, mimeType: string): Prom
     const extractionPrompt = {
         text: `Extract any text you see in this image. Respond with only the extracted text.`
     };
+    const ai = getGoogleGenAI();
 
     try {
         const extractionResponse = await ai.models.generateContent({

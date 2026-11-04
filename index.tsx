@@ -136,6 +136,16 @@ function init() {
     setupPwaInstallPrompt();
     setPwaInstallHandlers();
 
+    // Network-First Service Worker-ის რეგისტრაცია და ავტომატური განახლება
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').then(reg => {
+            console.log('Tradicon PWA Service Worker რეგისტრირებულია:', reg.scope);
+            reg.update();
+        }).catch(err => {
+            console.warn('Service Worker რეგისტრაციის შეცდომა:', err);
+        });
+    }
+
     // Initial setup
     const savedLang = storage.getFromStorage<Language | null>('userLanguage', null);
     const initialLang = savedLang || (navigator.language.startsWith('ka') ? 'ka' : 'es') as Language;
