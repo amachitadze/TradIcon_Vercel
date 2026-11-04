@@ -38,26 +38,40 @@ Vercel ავტომატურად ამოიცნობს პრო�
 ### ნაბიჯი 4: გარემოს ცვლადების (Environment Variables) დამატება ⚠️ (კრიტიკულია!)
 იმისათვის, რომ Gemini-ის ხელოვნურმა ინტელექტმა იმუშაოს შეუფერხებლად:
 1. პროექტის იმპორტის გვერდზე გახსენით განყოფილება **"Environment Variables"** (ან დეპლოის შემდეგ გადადით: *Settings > Environment Variables*).
-2. შეიყვანეთ შემდეგი მონაცემი:
-   - **Key (სახელი):** `GEMINI_API_KEY`
-   - **Value (მნიშვნელობა):** თქვენი Google AI Studio-ს API გასაღები (მაგალითად: `AIzaSy...`)
+2. შეიყვანეთ ცვლადები:
+   - **`GEMINI_API_KEY`** (ძირითადი): Google AI Studio-ს API გასაღები (`AIzaSy...`)
+   - **`GROQ_API_KEY`** (რეკომენდებული ალტერნატივა): უფასო გასაღები [Groq Console](https://console.groq.com/keys)-დან. გამოიყენება ავტომატურ ფოლბექად (Llama 3.3 70B), თუ Gemini გადაიტვირთება (503).
+   - **`OPENROUTER_API_KEY`** (არასავალდებულო): უფასო გასაღები [OpenRouter](https://openrouter.ai/keys)-იდან.
 3. მონიშნეთ სამივე გარემო: **Production**, **Preview**, **Development**.
 4. დააჭირეთ **"Add"**.
 
-*(შენიშვნა: სისტემა ასევე მხარს უჭერს ცვლადს სახელწოდებით `API_KEY`)*
+*(შენიშვნა: სისტემა ასევე მხარს უჭერს `API_KEY` სახელს Gemini-სთვის)*
 
 ### ნაბიჯი 5: დეპლოიმენტი
 დააჭირეთ **"Deploy"** ღილაკს. ბილდი წარმატებით დასრულდება და თქვენ მიიღებთ მზა, მაღალი წარმადობის ბმულს (მაგ. `tradicon.vercel.app`).
 
 ---
 
-## 🔑 როგორ მივიღოთ Google Gemini API გასაღები
+## ⚡ Multi-Provider AI Fallback (ავტომატური რეზერვაცია)
 
-1. გადადით [Google AI Studio](https://aistudio.google.com/)-ზე.
-2. გაიარეთ ავტორიზაცია თქვენი Google ანგარიშით.
-3. დააჭირეთ ლურჯ ღილაკს **"Get API key"**.
-4. აირჩიეთ არსებული Google Cloud პროექტი ან შექმენით ახალი ერთი დაწკაპუნებით (**"Create API key in new project"**).
-5. დააკოპირეთ გენერირებული გასაღები და ჩასვით Vercel-ის ან ლოკალურ `.env.local` ფაილში.
+აპლიკაციაში ჩაშენებულია 4-დონიანი საიმედოობის კასკადი:
+1. **Google Gemini 3.8 Flash** — ძირითადი, მაღალი სიზუსტის მოდელი.
+2. **Google Gemini 3.1 Flash-Lite** — პირველი ავტომატური ფოლბექი Gemini-ს 503/429 გადატვირთვისას.
+3. **Groq (Llama 3.3 70B Versatile)** — მეორე ფოლბექი (მსოფლიოში ყველაზე სწრაფი LPU ინფერენსი, თუ მითითებულია `GROQ_API_KEY`).
+4. **OpenRouter (Llama 3.3 / Free Models)** — მესამე რეზერვი (თუ მითითებულია `OPENROUTER_API_KEY`).
+
+---
+
+## 🔑 როგორ მივიღოთ API გასაღებები
+
+1. **Google Gemini:**
+   - შედით [Google AI Studio](https://aistudio.google.com/)-ზე.
+   - დააჭირეთ **"Get API key"** -> **"Create API key in new project"**.
+2. **Groq (უფასო და ულტრა-სწრაფი):**
+   - შედით [Groq Console](https://console.groq.com/keys)-ზე.
+   - შექმენით ახალი გასაღები (**"Create API Key"**).
+3. **OpenRouter:**
+   - შედით [OpenRouter Keys](https://openrouter.ai/keys)-ზე და შექმენით გასაღები.
 
 ---
 

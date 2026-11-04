@@ -496,6 +496,35 @@ async function sendChatMessage() {
 
     } catch(error) {
         console.error("Chat error:", error);
+
+        // ავტომატური ფოლბექის მცდელობა Groq / OpenRouter / Gemini Lite-ით
+        try {
+            console.log("ჩატის ფოლბექის გაშვება...");
+            const fallbackResponse = await gemini.sendChatMessageFallback(textToSend, activePersona.prompt);
+            loadingEl.remove();
+
+            messagesContainer.insertAdjacentHTML('beforeend', renderChatMessage({role: 'model', text: fallbackResponse}));
+            const lastBubble = messagesContainer.querySelector('.model-message:last-child');
+            const speakBtn = lastBubble?.querySelector('.message-speak-btn');
+            if (speakBtn) {
+                (speakBtn as HTMLElement).dataset.text = fallbackResponse;
+                if (state.getIsChatAutoSpeakEnabled()) {
+                    utils.speakText(fallbackResponse, 'es', speakBtn as HTMLButtonElement);
+                }
+            }
+
+            const finalModelMessage: ChatMessage = { role: 'model', text: fallbackResponse };
+            state.setActiveChatHistory([...state.getActiveChatHistory(), finalModelMessage]);
+            const allHistories = storage.getChatHistories();
+            if (activePersonaId) {
+                allHistories[activePersonaId] = state.getActiveChatHistory();
+                storage.saveChatHistories(allHistories);
+            }
+            return;
+        } catch (fallbackErr) {
+            console.error("ჩატის ფოლბექიც ჩავარდა:", fallbackErr);
+        }
+
         loadingEl.remove();
 
         const t = translations[state.getCurrentLanguage()];
