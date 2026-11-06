@@ -8,14 +8,14 @@ import * as usageTracker from './usage-tracker.js';
 
 // --- Multi-Provider Key Resolution (Dynamic & Tree-Shaking Immune) ---
 
-export type ProviderName = 'gemini' | 'groq' | 'openrouter';
-export type ProviderPreference = 'auto' | 'groq' | 'gemini' | 'openrouter';
+export type ProviderName = 'gemini' | 'groq' | 'openrouter' | 'custom';
+export type ProviderPreference = 'auto' | 'groq' | 'gemini' | 'openrouter' | 'custom';
 
 export function getPreferredProvider(): ProviderPreference {
     if (typeof window === 'undefined') return 'auto';
     try {
         const p = localStorage.getItem('PREFERRED_AI_PROVIDER');
-        if (p === 'groq' || p === 'gemini' || p === 'openrouter' || p === 'auto') {
+        if (p === 'groq' || p === 'gemini' || p === 'openrouter' || p === 'custom' || p === 'auto') {
             return p;
         }
     } catch {}
@@ -28,6 +28,48 @@ export function setPreferredProvider(pref: ProviderPreference): void {
         localStorage.setItem('PREFERRED_AI_PROVIDER', pref);
     } catch (e) {
         console.error("Failed to save preferred provider:", e);
+    }
+}
+
+export function getCustomEndpoint(): string {
+    if (typeof window === 'undefined') return 'https://api.openai.com/v1/chat/completions';
+    try {
+        return localStorage.getItem('CUSTOM_API_ENDPOINT') || 'https://api.openai.com/v1/chat/completions';
+    } catch {}
+    return 'https://api.openai.com/v1/chat/completions';
+}
+
+export function saveCustomEndpoint(url: string): void {
+    if (typeof window === 'undefined') return;
+    try {
+        if (url && url.trim()) {
+            localStorage.setItem('CUSTOM_API_ENDPOINT', url.trim());
+        } else {
+            localStorage.removeItem('CUSTOM_API_ENDPOINT');
+        }
+    } catch (e) {
+        console.error("Failed to save custom endpoint:", e);
+    }
+}
+
+export function getCustomModel(): string {
+    if (typeof window === 'undefined') return 'gpt-4o-mini';
+    try {
+        return localStorage.getItem('CUSTOM_API_MODEL') || 'gpt-4o-mini';
+    } catch {}
+    return 'gpt-4o-mini';
+}
+
+export function saveCustomModel(model: string): void {
+    if (typeof window === 'undefined') return;
+    try {
+        if (model && model.trim()) {
+            localStorage.setItem('CUSTOM_API_MODEL', model.trim());
+        } else {
+            localStorage.removeItem('CUSTOM_API_MODEL');
+        }
+    } catch (e) {
+        console.error("Failed to save custom model:", e);
     }
 }
 
@@ -51,6 +93,9 @@ export function getApiKeys(provider: ProviderName): string[] {
             if (provider === 'openrouter' && win.__TRADICON_ENV__.OPENROUTER_API_KEY) {
                 rawKeys.push(String(win.__TRADICON_ENV__.OPENROUTER_API_KEY));
             }
+            if (provider === 'custom' && win.__TRADICON_ENV__.CUSTOM_API_KEY) {
+                rawKeys.push(String(win.__TRADICON_ENV__.CUSTOM_API_KEY));
+            }
         }
     }
 
@@ -64,6 +109,9 @@ export function getApiKeys(provider: ProviderName): string[] {
             if (k) rawKeys.push(String(k));
         } else if (provider === 'openrouter') {
             const k = process.env.OPENROUTER_API_KEY;
+            if (k) rawKeys.push(String(k));
+        } else if (provider === 'custom') {
+            const k = process.env.CUSTOM_API_KEY;
             if (k) rawKeys.push(String(k));
         }
     } catch {}
@@ -79,6 +127,9 @@ export function getApiKeys(provider: ProviderName): string[] {
                 if (ls) rawKeys.push(ls);
             } else if (provider === 'openrouter') {
                 const ls = localStorage.getItem('OPENROUTER_API_KEY') || localStorage.getItem('VITE_OPENROUTER_API_KEY');
+                if (ls) rawKeys.push(ls);
+            } else if (provider === 'custom') {
+                const ls = localStorage.getItem('CUSTOM_API_KEY');
                 if (ls) rawKeys.push(ls);
             }
         } catch {}
@@ -108,11 +159,17 @@ export function getApiKey(provider: ProviderName): string {
 export function saveApiKeyToStorage(provider: ProviderName, value: string): void {
     if (typeof window === 'undefined') return;
     try {
-        const key = provider === 'gemini' ? 'GEMINI_API_KEY' : provider === 'groq' ? 'GROQ_API_KEY' : 'OPENROUTER_API_KEY';
+        const keyMap: Record<ProviderName, string> = {
+            gemini: 'GEMINI_API_KEY',
+            groq: 'GROQ_API_KEY',
+            openrouter: 'OPENROUTER_API_KEY',
+            custom: 'CUSTOM_API_KEY'
+        };
+        const storageKey = keyMap[provider];
         if (value && value.trim()) {
-            localStorage.setItem(key, value.trim());
+            localStorage.setItem(storageKey, value.trim());
         } else {
-            localStorage.removeItem(key);
+            localStorage.removeItem(storageKey);
         }
     } catch (e) {
         console.error("Failed to save API key to localStorage:", e);
@@ -123,9 +180,10 @@ export function assertApiKey(): void {
     const hasGemini = getApiKeys('gemini').length > 0;
     const hasGroq = getApiKeys('groq').length > 0;
     const hasOpenRouter = getApiKeys('openrouter').length > 0;
+    const hasCustom = getApiKeys('custom').length > 0;
 
-    if (!hasGemini && !hasGroq && !hasOpenRouter) {
-        throw new Error("AI API გასაღები (GEMINI_API_KEY, GROQ_API_KEY ან OPENROUTER_API_KEY) არ არის კონფიგურირებული. გთხოვთ მიუთითოთ ის Vercel Settings-ში ან აპლიკაციის პარამეტრებში.");
+    if (!hasGemini && !hasGroq && !hasOpenRouter && !hasCustom) {
+        throw new Error("AI API გასაღები (GEMINI_API_KEY, GROQ_API_KEY, OPENROUTER_API_KEY ან CUSTOM_API_KEY) არ არის კონფიგურირებული. გთხოვთ მიუთითოთ ის პარამეტრებში (⚙️).");
     }
 }
 
@@ -244,13 +302,68 @@ async function callGeminiWithKeys(model: string, options: AiExecuteOptions, keys
     throw new Error(`ყველა Gemini გასაღები ჩავარდა: ${errors.join('; ')}`);
 }
 
-// Groq-ის მოდელების სია: llama-3.1-8b-instant ხელმისაწვდომია 100% უფასო ანგარიშებზე
-const GROQ_MODELS = [
-    'llama-3.1-8b-instant',
-    'llama-3.3-70b-versatile',
-    'llama3-8b-8192',
-    'mixtral-8x7b-32768'
-];
+// Groq-ის მოდელების დინამიური ქეშირება და ავტო-შერჩევა
+let cachedGroqModels: { [key: string]: { timestamp: number; models: string[] } } = {};
+
+export async function fetchLiveGroqModels(key: string): Promise<string[]> {
+    const trimmedKey = key.trim();
+    const cached = cachedGroqModels[trimmedKey];
+    const now = Date.now();
+    // Cache for 10 minutes
+    if (cached && now - cached.timestamp < 10 * 60 * 1000 && cached.models.length > 0) {
+        return cached.models;
+    }
+
+    const defaultFallback = [
+        'llama-3.3-70b-versatile',
+        'llama-3.1-8b-instant',
+        'gemma2-9b-it'
+    ];
+
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2500);
+
+        const res = await fetch('https://api.groq.com/openai/v1/models', {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${trimmedKey}`
+            },
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data?.data)) {
+                const activeIds = data.data
+                    .filter((m: any) => m && m.active !== false && typeof m.id === 'string')
+                    .map((m: any) => m.id as string)
+                    .filter((id: string) => !id.includes('whisper') && !id.includes('guard') && !id.includes('llama3-8b-8192') && !id.includes('mixtral-8x7b'));
+
+                // პრიორიტეტული სორტირება: llama-3.3-70b > llama-3.1-8b > სხვები
+                const prioritized = activeIds.sort((a: string, b: string) => {
+                    const getScore = (name: string) => {
+                        if (name.includes('llama-3.3-70b')) return 100;
+                        if (name.includes('llama-3.1-8b')) return 90;
+                        if (name.includes('gemma2')) return 70;
+                        return 40;
+                    };
+                    return getScore(b) - getScore(a);
+                });
+
+                if (prioritized.length > 0) {
+                    cachedGroqModels[trimmedKey] = { timestamp: now, models: prioritized };
+                    return prioritized;
+                }
+            }
+        }
+    } catch (e) {
+        console.warn("Groq ცოცხალი მოდელების ჩატვირთვა ვერ მოხერხდა, გამოიყენება სტანდარტული სია:", e);
+    }
+
+    return defaultFallback;
+}
 
 async function callGroqSingleKey(options: AiExecuteOptions, key: string): Promise<string> {
     let userPrompt = options.prompt;
@@ -273,8 +386,10 @@ async function callGroqSingleKey(options: AiExecuteOptions, key: string): Promis
     }
     messages.push({ role: 'user', content: userPrompt });
 
+    const modelsToTry = await fetchLiveGroqModels(key);
     let lastError = '';
-    for (const model of GROQ_MODELS) {
+
+    for (const model of modelsToTry) {
         try {
             const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
                 method: 'POST',
@@ -293,8 +408,17 @@ async function callGroqSingleKey(options: AiExecuteOptions, key: string): Promis
 
             if (!response.ok) {
                 const errorText = await response.text();
-                if (response.status === 404 || errorText.includes('model_not_found') || errorText.includes('does not exist')) {
-                    console.warn(`Groq მოდელი ${model} მიუწვდომელია (404), გადავდივართ ალტერნატივაზე...`);
+                const isModelUnavailable =
+                    response.status === 404 ||
+                    response.status === 400 ||
+                    errorText.includes('model_decommissioned') ||
+                    errorText.includes('decommissioned') ||
+                    errorText.includes('model_not_found') ||
+                    errorText.includes('does not exist') ||
+                    errorText.includes('not have access');
+
+                if (isModelUnavailable) {
+                    console.warn(`Groq მოდელი ${model} მიუწვდომელია (${response.status}), გადავდივართ შემდეგ ალტერნატივაზე...`);
                     lastError = `Groq (${model}): ${errorText}`;
                     continue;
                 }
@@ -309,13 +433,19 @@ async function callGroqSingleKey(options: AiExecuteOptions, key: string): Promis
             return content;
         } catch (err: any) {
             const msg = String(err?.message || '');
-            if (msg.includes('404') || msg.includes('model_not_found') || msg.includes('does not exist')) {
+            if (
+                msg.includes('404') ||
+                msg.includes('400') ||
+                msg.includes('decommissioned') ||
+                msg.includes('model_not_found') ||
+                msg.includes('does not exist')
+            ) {
                 continue;
             }
             throw err;
         }
     }
-    throw new Error(`Groq შეცდომა: ${lastError}`);
+    throw new Error(`Groq შეცდომა: ${lastError || 'არცერთი მოდელი არ არის ხელმისაწვდომი'}`);
 }
 
 async function callGroqWithKeys(options: AiExecuteOptions, keys: string[], timeoutMs = 6000): Promise<string> {
@@ -427,9 +557,77 @@ async function callOpenRouterWithKeys(options: AiExecuteOptions, keys: string[],
     throw new Error(`ყველა OpenRouter გასაღები ჩავარდა: ${errors.join('; ')}`);
 }
 
+async function callCustomSingleKey(options: AiExecuteOptions, key: string): Promise<string> {
+    let userPrompt = options.prompt;
+    const isJsonMode = Boolean(options.isJson || options.schema);
+
+    if (isJsonMode) {
+        userPrompt += "\n\nCRITICAL: Respond ONLY with a valid, raw JSON object matching the requested schema. Do NOT wrap in markdown formatting (no ```json).";
+    }
+
+    const messages: Array<{ role: 'system' | 'user'; content: string }> = [];
+    let systemText = options.systemInstruction || '';
+    if (isJsonMode) {
+        systemText = systemText
+            ? `${systemText} You must output valid JSON.`
+            : "You are a helpful assistant that outputs valid JSON.";
+    }
+
+    if (systemText) {
+        messages.push({ role: 'system', content: systemText });
+    }
+    messages.push({ role: 'user', content: userPrompt });
+
+    const endpoint = getCustomEndpoint();
+    const model = getCustomModel();
+
+    const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${key.trim()}`
+        },
+        body: JSON.stringify({
+            model,
+            messages,
+            response_format: isJsonMode ? { type: 'json_object' } : undefined,
+            temperature: 0.1
+        })
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Custom API შეცდომა (${response.status}): ${errorText}`);
+    }
+
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) {
+        throw new Error("Custom API-მ დააბრუნა ცარიელი პასუხი.");
+    }
+    return content;
+}
+
+async function callCustomWithKeys(options: AiExecuteOptions, keys: string[], timeoutMs = 12000): Promise<string> {
+    if (keys.length === 0) throw new Error("CUSTOM_API_KEY არ არის კონფიგურირებული.");
+    const errors: string[] = [];
+
+    for (let i = 0; i < keys.length; i++) {
+        const key = keys[i];
+        try {
+            return await withTimeout(callCustomSingleKey(options, key), timeoutMs, `Custom API (${getCustomModel()})`);
+        } catch (err: any) {
+            const errStr = String(err?.message || err || '');
+            console.warn(`Custom API გასაღები #${i + 1} შეცდომა:`, errStr);
+            errors.push(`Key #${i + 1}: ${errStr}`);
+        }
+    }
+    throw new Error(`ყველა პერსონალური (Custom) API გასაღები ჩავარდა: ${errors.join('; ')}`);
+}
+
 /**
  * ასრულებს AI მოთხოვნას მრავალპროვაიდერიანი კასკადითა და გასაღებების პულინგით.
- * ტაიმაუტები: Groq (6 წმ), Gemini (12 წმ), OpenRouter (8 წმ).
+ * ტაიმაუტები: Groq (6 წმ), Gemini (12 წმ), OpenRouter (8 წმ), Custom (12 წმ).
  * გადართვა ხდება მომენტალურად (წამების მეასედში).
  */
 export async function executeAiWithFallback(options: AiExecuteOptions): Promise<string> {
@@ -439,6 +637,7 @@ export async function executeAiWithFallback(options: AiExecuteOptions): Promise<
     const geminiKeys = getApiKeys('gemini');
     const groqKeys = getApiKeys('groq');
     const openRouterKeys = getApiKeys('openrouter');
+    const customKeys = getApiKeys('custom');
     const pref = getPreferredProvider();
 
     const tryGroq = async (): Promise<string | null> => {
@@ -480,6 +679,19 @@ export async function executeAiWithFallback(options: AiExecuteOptions): Promise<
         }
     };
 
+    const tryCustom = async (): Promise<string | null> => {
+        if (customKeys.length === 0) return null;
+        try {
+            console.log(`🛠️ [Custom API: ${getCustomModel()}] მოთხოვნის გაგზავნა...`);
+            return await callCustomWithKeys(options, customKeys, 12000);
+        } catch (err: any) {
+            const msg = String(err?.message || err || '');
+            console.warn("Custom API შეფერხება:", msg);
+            errors.push(`Custom API (${getCustomModel()}): ${msg}`);
+            return null;
+        }
+    };
+
     const tryGeminiLite = async (): Promise<string | null> => {
         if (geminiKeys.length === 0) return null;
         try {
@@ -497,15 +709,19 @@ export async function executeAiWithFallback(options: AiExecuteOptions): Promise<
     const chain: Array<() => Promise<string | null>> = [];
 
     if (pref === 'groq') {
-        chain.push(tryGroq, tryGeminiFlash, tryOpenRouter, tryGeminiLite);
+        chain.push(tryGroq, tryGeminiFlash, tryOpenRouter, tryCustom, tryGeminiLite);
+    } else if (pref === 'custom') {
+        chain.push(tryCustom, tryGroq, tryGeminiFlash, tryOpenRouter, tryGeminiLite);
     } else if (pref === 'gemini') {
-        chain.push(tryGeminiFlash, tryGroq, tryOpenRouter, tryGeminiLite);
+        chain.push(tryGeminiFlash, tryGroq, tryOpenRouter, tryCustom, tryGeminiLite);
     } else if (pref === 'openrouter') {
-        chain.push(tryOpenRouter, tryGroq, tryGeminiFlash, tryGeminiLite);
+        chain.push(tryOpenRouter, tryGroq, tryGeminiFlash, tryCustom, tryGeminiLite);
     } else {
         // 'auto' mode: თუ Groq გასაღები არსებობს, პრიორიტეტი Groq-ია 0.2 წამიანი სისწრაფისთვის!
         if (groqKeys.length > 0) {
-            chain.push(tryGroq, tryGeminiFlash, tryOpenRouter, tryGeminiLite);
+            chain.push(tryGroq, tryGeminiFlash, tryOpenRouter, tryCustom, tryGeminiLite);
+        } else if (customKeys.length > 0) {
+            chain.push(tryCustom, tryGeminiFlash, tryOpenRouter, tryGeminiLite);
         } else {
             chain.push(tryGeminiFlash, tryOpenRouter, tryGeminiLite);
         }
@@ -542,6 +758,7 @@ export async function testApiSpeed(): Promise<SpeedTestResult[]> {
     const groqKeys = getApiKeys('groq');
     const geminiKeys = getApiKeys('gemini');
     const openRouterKeys = getApiKeys('openrouter');
+    const customKeys = getApiKeys('custom');
 
     // Test Groq
     if (groqKeys.length > 0) {
@@ -579,6 +796,19 @@ export async function testApiSpeed(): Promise<SpeedTestResult[]> {
         } catch (e: any) {
             const duration = Math.round(performance.now() - start);
             results.push({ provider: 'OpenRouter', success: false, latencyMs: duration, message: e?.message || 'შეცდომა' });
+        }
+    }
+
+    // Test Custom
+    if (customKeys.length > 0) {
+        const start = performance.now();
+        try {
+            await withTimeout(callCustomSingleKey({ prompt: 'Respond with exactly: OK' }, customKeys[0]), 10000, `Custom API (${getCustomModel()})`);
+            const duration = Math.round(performance.now() - start);
+            results.push({ provider: `პერსონალური (${getCustomModel()})`, success: true, latencyMs: duration, message: `${duration}ms ⚡` });
+        } catch (e: any) {
+            const duration = Math.round(performance.now() - start);
+            results.push({ provider: `პერსონალური (${getCustomModel()})`, success: false, latencyMs: duration, message: e?.message || 'შეცდომა' });
         }
     }
 

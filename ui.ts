@@ -16,7 +16,7 @@ import { renderTranslatorView, addTranslatorEventListeners, handleImageUpload, h
 import { renderAboutView, renderHistoryView, renderFavoritesView, addViewsEventListeners, showImportOptions } from './views.js';
 import { renderGuidelinesView } from './guidelines.js';
 import * as usageTracker from './usage-tracker.js';
-import { getApiKey, getApiKeys, saveApiKeyToStorage, getPreferredProvider, setPreferredProvider, testApiSpeed, ProviderPreference } from './gemini.js';
+import { getApiKey, getApiKeys, saveApiKeyToStorage, getPreferredProvider, setPreferredProvider, testApiSpeed, ProviderPreference, getCustomEndpoint, saveCustomEndpoint, getCustomModel, saveCustomModel } from './gemini.js';
 
 // --- View Management ---
 
@@ -232,6 +232,9 @@ export function openApiSettingsModal() {
     const geminiInput = document.getElementById('gemini-key-input') as HTMLInputElement | null;
     const groqInput = document.getElementById('groq-key-input') as HTMLInputElement | null;
     const openrouterInput = document.getElementById('openrouter-key-input') as HTMLInputElement | null;
+    const customInput = document.getElementById('custom-key-input') as HTMLInputElement | null;
+    const customModelInput = document.getElementById('custom-model-input') as HTMLInputElement | null;
+    const customEndpointInput = document.getElementById('custom-endpoint-input') as HTMLInputElement | null;
     const prefSelect = document.getElementById('preferred-provider-select') as HTMLSelectElement | null;
     const testResultEl = document.getElementById('api-settings-test-result') as HTMLDivElement | null;
 
@@ -247,10 +250,12 @@ export function openApiSettingsModal() {
     const geminiBadge = document.getElementById('gemini-status-badge');
     const groqBadge = document.getElementById('groq-status-badge');
     const openrouterBadge = document.getElementById('openrouter-status-badge');
+    const customBadge = document.getElementById('custom-status-badge');
 
     const geminiKeys = getApiKeys('gemini');
     const groqKeys = getApiKeys('groq');
     const openrouterKeys = getApiKeys('openrouter');
+    const customKeys = getApiKeys('custom');
 
     const isKa = state.getCurrentLanguage() === 'ka';
 
@@ -272,10 +277,14 @@ export function openApiSettingsModal() {
     updateBadge(geminiBadge, geminiKeys);
     updateBadge(groqBadge, groqKeys);
     updateBadge(openrouterBadge, openrouterKeys);
+    updateBadge(customBadge, customKeys);
 
     if (geminiInput) geminiInput.value = localStorage.getItem('GEMINI_API_KEY') || '';
     if (groqInput) groqInput.value = localStorage.getItem('GROQ_API_KEY') || '';
     if (openrouterInput) openrouterInput.value = localStorage.getItem('OPENROUTER_API_KEY') || '';
+    if (customInput) customInput.value = localStorage.getItem('CUSTOM_API_KEY') || '';
+    if (customModelInput) customModelInput.value = localStorage.getItem('CUSTOM_API_MODEL') || 'gpt-4o-mini';
+    if (customEndpointInput) customEndpointInput.value = localStorage.getItem('CUSTOM_API_ENDPOINT') || '';
 
     modal.hidden = false;
     toggleMobileMenu(true);
@@ -309,11 +318,17 @@ export function addDelegatedEventListeners() {
             const geminiInput = document.getElementById('gemini-key-input') as HTMLInputElement | null;
             const groqInput = document.getElementById('groq-key-input') as HTMLInputElement | null;
             const openrouterInput = document.getElementById('openrouter-key-input') as HTMLInputElement | null;
+            const customInput = document.getElementById('custom-key-input') as HTMLInputElement | null;
+            const customModelInput = document.getElementById('custom-model-input') as HTMLInputElement | null;
+            const customEndpointInput = document.getElementById('custom-endpoint-input') as HTMLInputElement | null;
             const prefSelect = document.getElementById('preferred-provider-select') as HTMLSelectElement | null;
 
             if (geminiInput) saveApiKeyToStorage('gemini', geminiInput.value.trim());
             if (groqInput) saveApiKeyToStorage('groq', groqInput.value.trim());
             if (openrouterInput) saveApiKeyToStorage('openrouter', openrouterInput.value.trim());
+            if (customInput) saveApiKeyToStorage('custom', customInput.value.trim());
+            if (customModelInput) saveCustomModel(customModelInput.value.trim());
+            if (customEndpointInput) saveCustomEndpoint(customEndpointInput.value.trim());
             if (prefSelect) setPreferredProvider(prefSelect.value as ProviderPreference);
 
             updateDesktopApiStatusDot();
@@ -377,12 +392,21 @@ export function addDelegatedEventListeners() {
             saveApiKeyToStorage('gemini', '');
             saveApiKeyToStorage('groq', '');
             saveApiKeyToStorage('openrouter', '');
+            saveApiKeyToStorage('custom', '');
+            saveCustomModel('');
+            saveCustomEndpoint('');
             const geminiInput = document.getElementById('gemini-key-input') as HTMLInputElement | null;
             const groqInput = document.getElementById('groq-key-input') as HTMLInputElement | null;
             const openrouterInput = document.getElementById('openrouter-key-input') as HTMLInputElement | null;
+            const customInput = document.getElementById('custom-key-input') as HTMLInputElement | null;
+            const customModelInput = document.getElementById('custom-model-input') as HTMLInputElement | null;
+            const customEndpointInput = document.getElementById('custom-endpoint-input') as HTMLInputElement | null;
             if (geminiInput) geminiInput.value = '';
             if (groqInput) groqInput.value = '';
             if (openrouterInput) openrouterInput.value = '';
+            if (customInput) customInput.value = '';
+            if (customModelInput) customModelInput.value = 'gpt-4o-mini';
+            if (customEndpointInput) customEndpointInput.value = '';
             updateDesktopApiStatusDot();
             openApiSettingsModal(); // refresh badges
             return;
