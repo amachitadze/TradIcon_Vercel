@@ -200,19 +200,34 @@ async function callGeminiSingleKey(model: string, options: AiExecuteOptions, key
         config.responseSchema = options.schema;
     }
 
-    const response = await ai.models.generateContent({
-        model,
-        contents: options.prompt,
-        config: Object.keys(config).length > 0 ? config : undefined
-    });
+    try {
+        const response = await ai.models.generateContent({
+            model,
+            contents: options.prompt,
+            config: Object.keys(config).length > 0 ? config : undefined
+        });
 
-    if (!response || !response.text) {
-        throw new Error("Received an empty response from Gemini.");
+        if (!response || !response.text) {
+            throw new Error("Received an empty response from Gemini.");
+        }
+        return response.text;
+    } catch (err: any) {
+        const errStr = String(err?.message || err || '');
+        // თუ gemini-3.8-flash გადატვირთულია ან 404-ს აბრუნებს, ვცდით gemini-3.1-flash-lite-ს
+        if (model !== 'gemini-3.1-flash-lite' && (errStr.includes('404') || isServiceUnavailableError(err))) {
+            console.warn(`Gemini (${model}) შეფერხდა, ფოლბექი gemini-3.1-flash-lite-ზე...`);
+            const fallbackResponse = await ai.models.generateContent({
+                model: 'gemini-3.1-flash-lite',
+                contents: options.prompt,
+                config: Object.keys(config).length > 0 ? config : undefined
+            });
+            if (fallbackResponse?.text) return fallbackResponse.text;
+        }
+        throw err;
     }
-    return response.text;
 }
 
-async function callGeminiWithKeys(model: string, options: AiExecuteOptions, keys: string[], timeoutMs = 4500): Promise<string> {
+async function callGeminiWithKeys(model: string, options: AiExecuteOptions, keys: string[], timeoutMs = 12000): Promise<string> {
     if (keys.length === 0) throw new Error("GEMINI_API_KEY არ არის კონფიგურირებული.");
     const errors: string[] = [];
 
@@ -228,6 +243,14 @@ async function callGeminiWithKeys(model: string, options: AiExecuteOptions, keys
     }
     throw new Error(`ყველა Gemini გასაღები ჩავარდა: ${errors.join('; ')}`);
 }
+
+// Groq-ის მოდელების სია: llama-3.1-8b-instant ხელმისაწვდომია 100% უფასო ანგარიშებზე
+const GROQ_MODELS = [
+    'llama-3.1-8b-instant',
+    'llama-3.3-70b-versatile',
+    'llama3-8b-8192',
+    'mixtral-8x7b-32768'
+];
 
 async function callGroqSingleKey(options: AiExecuteOptions, key: string): Promise<string> {
     let userPrompt = options.prompt;
@@ -250,35 +273,52 @@ async function callGroqSingleKey(options: AiExecuteOptions, key: string): Promis
     }
     messages.push({ role: 'user', content: userPrompt });
 
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${key.trim()}`
-        },
-        body: JSON.stringify({
-            model: 'llama-3.3-70b-versatile',
-            messages,
-            response_format: isJsonMode ? { type: 'json_object' } : undefined,
-            temperature: 0.1,
-            max_tokens: 4096
-        })
-    });
+    let lastError = '';
+    for (const model of GROQ_MODELS) {
+        try {
+            const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${key.trim()}`
+                },
+                body: JSON.stringify({
+                    model,
+                    messages,
+                    response_format: isJsonMode ? { type: 'json_object' } : undefined,
+                    temperature: 0.1,
+                    max_tokens: 4096
+                })
+            });
 
-    if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Groq შეცდომა (${response.status}): ${errorText}`);
-    }
+            if (!response.ok) {
+                const errorText = await response.text();
+                if (response.status === 404 || errorText.includes('model_not_found') || errorText.includes('does not exist')) {
+                    console.warn(`Groq მოდელი ${model} მიუწვდომელია (404), გადავდივართ ალტერნატივაზე...`);
+                    lastError = `Groq (${model}): ${errorText}`;
+                    continue;
+                }
+                throw new Error(`Groq შეცდომა (${response.status}): ${errorText}`);
+            }
 
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content;
-    if (!content) {
-        throw new Error("Groq-მა დააბრუნა ცარიელი პასუხი.");
+            const data = await response.json();
+            const content = data.choices?.[0]?.message?.content;
+            if (!content) {
+                throw new Error("Groq-მა დააბრუნა ცარიელი პასუხი.");
+            }
+            return content;
+        } catch (err: any) {
+            const msg = String(err?.message || '');
+            if (msg.includes('404') || msg.includes('model_not_found') || msg.includes('does not exist')) {
+                continue;
+            }
+            throw err;
+        }
     }
-    return content;
+    throw new Error(`Groq შეცდომა: ${lastError}`);
 }
 
-async function callGroqWithKeys(options: AiExecuteOptions, keys: string[], timeoutMs = 5000): Promise<string> {
+async function callGroqWithKeys(options: AiExecuteOptions, keys: string[], timeoutMs = 6000): Promise<string> {
     if (keys.length === 0) throw new Error("GROQ_API_KEY არ არის კონფიგურირებული.");
     const errors: string[] = [];
 
@@ -294,6 +334,14 @@ async function callGroqWithKeys(options: AiExecuteOptions, keys: string[], timeo
     }
     throw new Error(`ყველა Groq გასაღები ჩავარდა: ${errors.join('; ')}`);
 }
+
+// OpenRouter-ის მოდელების სია: openrouter/free დინამიურად პოულობს აქტიურ უფასო მოდელს
+const OPENROUTER_MODELS = [
+    'openrouter/free',
+    'meta-llama/llama-3.3-70b-instruct',
+    'google/gemma-2-9b-it:free',
+    'mistralai/mistral-7b-instruct:free'
+];
 
 async function callOpenRouterSingleKey(options: AiExecuteOptions, key: string): Promise<string> {
     let userPrompt = options.prompt;
@@ -316,36 +364,53 @@ async function callOpenRouterSingleKey(options: AiExecuteOptions, key: string): 
     }
     messages.push({ role: 'user', content: userPrompt });
 
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${key.trim()}`,
-            'HTTP-Referer': 'https://tradicon.vercel.app',
-            'X-Title': 'Tradicon'
-        },
-        body: JSON.stringify({
-            model: 'meta-llama/llama-3.3-70b-instruct:free',
-            messages,
-            response_format: isJsonMode ? { type: 'json_object' } : undefined,
-            temperature: 0.1
-        })
-    });
+    let lastError = '';
+    for (const model of OPENROUTER_MODELS) {
+        try {
+            const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${key.trim()}`,
+                    'HTTP-Referer': 'https://tradicon.vercel.app',
+                    'X-Title': 'Tradicon'
+                },
+                body: JSON.stringify({
+                    model,
+                    messages,
+                    response_format: isJsonMode ? { type: 'json_object' } : undefined,
+                    temperature: 0.1
+                })
+            });
 
-    if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`OpenRouter შეცდომა (${response.status}): ${errorText}`);
-    }
+            if (!response.ok) {
+                const errorText = await response.text();
+                if (response.status === 404 || errorText.includes('unavailable for free') || errorText.includes('No available endpoints')) {
+                    console.warn(`OpenRouter მოდელი ${model} მიუწვდომელია (404), გადავდივართ ალტერნატივაზე...`);
+                    lastError = `OpenRouter (${model}): ${errorText}`;
+                    continue;
+                }
+                throw new Error(`OpenRouter შეცდომა (${response.status}): ${errorText}`);
+            }
 
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content;
-    if (!content) {
-        throw new Error("OpenRouter-მა დააბრუნა ცარიელი პასუხი.");
+            const data = await response.json();
+            const content = data.choices?.[0]?.message?.content;
+            if (!content) {
+                throw new Error("OpenRouter-მა დააბრუნა ცარიელი პასუხი.");
+            }
+            return content;
+        } catch (err: any) {
+            const msg = String(err?.message || '');
+            if (msg.includes('404') || msg.includes('unavailable for free')) {
+                continue;
+            }
+            throw err;
+        }
     }
-    return content;
+    throw new Error(`OpenRouter შეცდომა: ${lastError}`);
 }
 
-async function callOpenRouterWithKeys(options: AiExecuteOptions, keys: string[], timeoutMs = 6000): Promise<string> {
+async function callOpenRouterWithKeys(options: AiExecuteOptions, keys: string[], timeoutMs = 8000): Promise<string> {
     if (keys.length === 0) throw new Error("OPENROUTER_API_KEY არ არის კონფიგურირებული.");
     const errors: string[] = [];
 
@@ -364,7 +429,7 @@ async function callOpenRouterWithKeys(options: AiExecuteOptions, keys: string[],
 
 /**
  * ასრულებს AI მოთხოვნას მრავალპროვაიდერიანი კასკადითა და გასაღებების პულინგით.
- * ტაიმაუტები: Gemini (4.5 წმ), Groq (5 წმ), OpenRouter (6 წმ).
+ * ტაიმაუტები: Groq (6 წმ), Gemini (12 წმ), OpenRouter (8 წმ).
  * გადართვა ხდება მომენტალურად (წამების მეასედში).
  */
 export async function executeAiWithFallback(options: AiExecuteOptions): Promise<string> {
@@ -379,8 +444,8 @@ export async function executeAiWithFallback(options: AiExecuteOptions): Promise<
     const tryGroq = async (): Promise<string | null> => {
         if (groqKeys.length === 0) return null;
         try {
-            console.log("⚡ [Groq LPU] მოთხოვნის გაგზავნა (სავარაუდო პასუხი ~0.2 წმ)...");
-            return await callGroqWithKeys(options, groqKeys, 5000);
+            console.log("⚡ [Groq LPU] მოთხოვნის გაგზავნა (~0.2 წმ)...");
+            return await callGroqWithKeys(options, groqKeys, 6000);
         } catch (err: any) {
             const msg = String(err?.message || err || '');
             console.warn("Groq შეფერხება:", msg);
@@ -392,8 +457,8 @@ export async function executeAiWithFallback(options: AiExecuteOptions): Promise<
     const tryGeminiFlash = async (): Promise<string | null> => {
         if (geminiKeys.length === 0) return null;
         try {
-            console.log("✨ [Gemini 3.8 Flash] მოთხოვნის გაგზავნა (Timeout: 4.5 წმ)...");
-            return await callGeminiWithKeys('gemini-3.8-flash', options, geminiKeys, 4500);
+            console.log("✨ [Gemini 3.8 Flash] მოთხოვნის გაგზავნა (Timeout: 12 წმ)...");
+            return await callGeminiWithKeys('gemini-3.8-flash', options, geminiKeys, 12000);
         } catch (err: any) {
             const msg = String(err?.message || err || '');
             console.warn("Gemini 3.8 Flash შეფერხება:", msg);
@@ -406,7 +471,7 @@ export async function executeAiWithFallback(options: AiExecuteOptions): Promise<
         if (openRouterKeys.length === 0) return null;
         try {
             console.log("🌐 [OpenRouter] მოთხოვნის გაგზავნა...");
-            return await callOpenRouterWithKeys(options, openRouterKeys, 6000);
+            return await callOpenRouterWithKeys(options, openRouterKeys, 8000);
         } catch (err: any) {
             const msg = String(err?.message || err || '');
             console.warn("OpenRouter შეფერხება:", msg);
@@ -418,8 +483,8 @@ export async function executeAiWithFallback(options: AiExecuteOptions): Promise<
     const tryGeminiLite = async (): Promise<string | null> => {
         if (geminiKeys.length === 0) return null;
         try {
-            console.log("✨ [Gemini 3.1 Flash-Lite] ფოლბექი (Timeout: 5 წმ)...");
-            return await callGeminiWithKeys('gemini-3.1-flash-lite', options, geminiKeys, 5000);
+            console.log("✨ [Gemini 3.1 Flash-Lite] ფოლბექი (Timeout: 12 წმ)...");
+            return await callGeminiWithKeys('gemini-3.1-flash-lite', options, geminiKeys, 12000);
         } catch (err: any) {
             const msg = String(err?.message || err || '');
             console.warn("Gemini 3.1 Flash-Lite შეფერხება:", msg);
@@ -482,7 +547,7 @@ export async function testApiSpeed(): Promise<SpeedTestResult[]> {
     if (groqKeys.length > 0) {
         const start = performance.now();
         try {
-            await withTimeout(callGroqSingleKey({ prompt: 'Respond with exactly: OK' }, groqKeys[0]), 4000, 'Groq');
+            await withTimeout(callGroqSingleKey({ prompt: 'Respond with exactly: OK' }, groqKeys[0]), 6000, 'Groq');
             const duration = Math.round(performance.now() - start);
             results.push({ provider: `Groq (${groqKeys.length} გასაღები)`, success: true, latencyMs: duration, message: `${duration}ms ⚡ (სწრაფი)` });
         } catch (e: any) {
@@ -495,7 +560,7 @@ export async function testApiSpeed(): Promise<SpeedTestResult[]> {
     if (geminiKeys.length > 0) {
         const start = performance.now();
         try {
-            await withTimeout(callGeminiSingleKey('gemini-3.8-flash', { prompt: 'Respond with exactly: OK' }, geminiKeys[0]), 4500, 'Gemini');
+            await withTimeout(callGeminiSingleKey('gemini-3.8-flash', { prompt: 'Respond with exactly: OK' }, geminiKeys[0]), 12000, 'Gemini');
             const duration = Math.round(performance.now() - start);
             results.push({ provider: `Gemini (${geminiKeys.length} გასაღები)`, success: true, latencyMs: duration, message: `${duration}ms` });
         } catch (e: any) {
@@ -508,7 +573,7 @@ export async function testApiSpeed(): Promise<SpeedTestResult[]> {
     if (openRouterKeys.length > 0) {
         const start = performance.now();
         try {
-            await withTimeout(callOpenRouterSingleKey({ prompt: 'Respond with exactly: OK' }, openRouterKeys[0]), 6000, 'OpenRouter');
+            await withTimeout(callOpenRouterSingleKey({ prompt: 'Respond with exactly: OK' }, openRouterKeys[0]), 8000, 'OpenRouter');
             const duration = Math.round(performance.now() - start);
             results.push({ provider: `OpenRouter (${openRouterKeys.length} გასაღები)`, success: true, latencyMs: duration, message: `${duration}ms` });
         } catch (e: any) {

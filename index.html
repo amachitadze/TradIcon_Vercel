@@ -267,10 +267,10 @@
                         <span>პირველადი პროვაიდერი / რეჟიმი:</span>
                     </label>
                     <select id="preferred-provider-select" style="width: 100%; padding: 0.5rem; border-radius: 8px; border: 1px solid #ccc; font-size: 0.85rem; background: #fff; cursor: pointer;">
-                        <option value="groq">⚡ Groq LPU (Llama 3.3 70B - ულტრა-სწრაფი 0.2 წმ, რეკომენდებული)</option>
+                        <option value="groq">⚡ Groq LPU (Llama 3.1 Instant - 0.2 წმ, რეკომენდებული)</option>
                         <option value="auto">🔄 ავტომატური (Smart Pool: Groq ➔ Gemini ➔ OpenRouter)</option>
-                        <option value="gemini">✨ Google Gemini 3.8 Flash (Timeout: 4.5 წმ)</option>
-                        <option value="openrouter">🌐 OpenRouter (უფასო ალტერნატივა)</option>
+                        <option value="gemini">✨ Google Gemini 3.8 Flash (Timeout: 12 წმ)</option>
+                        <option value="openrouter">🌐 OpenRouter (Smart Free Router)</option>
                     </select>
                 </div>
 
@@ -280,7 +280,7 @@
                         <span id="groq-status-badge" style="font-size: 0.75rem; padding: 2px 6px; border-radius: 4px; background: #eef; color: #33a;">შემოწმება...</span>
                     </div>
                     <input type="password" id="groq-key-input" placeholder="gsk_... (ან რამდენიმე: key1, key2)" style="width: 100%; padding: 0.55rem; border-radius: 8px; border: 1px solid #ccc; font-family: monospace; font-size: 0.85rem; box-sizing: border-box;">
-                    <span style="font-size: 0.73rem; color: #666; display: block; margin-top: 2px;">⚡ LPU ინფერენსი: პასუხი 0.2 წამში (არ ჭედავს და არ აგვიანებს).</span>
+                    <span style="font-size: 0.73rem; color: #666; display: block; margin-top: 2px;">⚡ LPU ინფერენსი: პასუხი 0.2 წამში (Llama 3.1 8B Instant).</span>
                 </div>
 
                 <div class="api-key-field">
@@ -289,7 +289,7 @@
                         <span id="gemini-status-badge" style="font-size: 0.75rem; padding: 2px 6px; border-radius: 4px; background: #eef; color: #33a;">შემოწმება...</span>
                     </div>
                     <input type="password" id="gemini-key-input" placeholder="AIzaSy... (ან Vercel Env, ან: key1, key2)" style="width: 100%; padding: 0.55rem; border-radius: 8px; border: 1px solid #ccc; font-family: monospace; font-size: 0.85rem; box-sizing: border-box;">
-                    <span style="font-size: 0.73rem; color: #666; display: block; margin-top: 2px;">⏱️ ავტომატური 4.5 წმ ტაიმაუტი: თუ Gemini გადაიტვირთა, მომენტალურად გადადის Groq-ზე.</span>
+                    <span style="font-size: 0.73rem; color: #666; display: block; margin-top: 2px;">⏱️ ავტომატური 12 წმ ტაიმაუტი: თუ Gemini გადაიტვირთა, მომენტალურად გადადის Groq-ზე.</span>
                 </div>
 
                 <div class="api-key-field">
