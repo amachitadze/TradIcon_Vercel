@@ -16,7 +16,7 @@ import { renderTranslatorView, addTranslatorEventListeners, handleImageUpload, h
 import { renderAboutView, renderHistoryView, renderFavoritesView, addViewsEventListeners, showImportOptions } from './views.js';
 import { renderGuidelinesView } from './guidelines.js';
 import * as usageTracker from './usage-tracker.js';
-import { getApiKey, saveApiKeyToStorage } from './gemini.js';
+import { getApiKey, getApiKeys, saveApiKeyToStorage, getPreferredProvider, setPreferredProvider, testApiSpeed, ProviderPreference } from './gemini.js';
 
 // --- View Management ---
 
@@ -192,6 +192,7 @@ export function updateUIForLanguage() {
         dom.footerAboutBtn.textContent = t.footerAbout;
     }
     
+    updateDesktopApiStatusDot();
     renderApp();
     updateGlobalUI();
 }
@@ -210,8 +211,19 @@ export function renderApp() {
     }
 }
 
-
-// --- Delegated Event Handlers ---
+export function updateDesktopApiStatusDot() {
+    const dot = document.getElementById('desktop-api-status-dot');
+    if (!dot) return;
+    const hasAny = getApiKeys('gemini').length > 0 || getApiKeys('groq').length > 0 || getApiKeys('openrouter').length > 0;
+    const isKa = state.getCurrentLanguage() === 'ka';
+    if (hasAny) {
+        dot.classList.remove('inactive');
+        dot.title = isKa ? 'API აქტიურია (ხელმისაწვდომია)' : 'API Activo';
+    } else {
+        dot.classList.add('inactive');
+        dot.title = isKa ? 'API გასაღებები არ არის კონფიგურირებული' : 'Sin claves API';
+    }
+}
 
 export function openApiSettingsModal() {
     const modal = document.getElementById('api-settings-modal');
@@ -220,21 +232,34 @@ export function openApiSettingsModal() {
     const geminiInput = document.getElementById('gemini-key-input') as HTMLInputElement | null;
     const groqInput = document.getElementById('groq-key-input') as HTMLInputElement | null;
     const openrouterInput = document.getElementById('openrouter-key-input') as HTMLInputElement | null;
+    const prefSelect = document.getElementById('preferred-provider-select') as HTMLSelectElement | null;
+    const testResultEl = document.getElementById('api-settings-test-result') as HTMLDivElement | null;
+
+    if (testResultEl) {
+        testResultEl.style.display = 'none';
+        testResultEl.innerHTML = '';
+    }
+
+    if (prefSelect) {
+        prefSelect.value = getPreferredProvider();
+    }
 
     const geminiBadge = document.getElementById('gemini-status-badge');
     const groqBadge = document.getElementById('groq-status-badge');
     const openrouterBadge = document.getElementById('openrouter-status-badge');
 
-    const geminiKey = getApiKey('gemini');
-    const groqKey = getApiKey('groq');
-    const openrouterKey = getApiKey('openrouter');
+    const geminiKeys = getApiKeys('gemini');
+    const groqKeys = getApiKeys('groq');
+    const openrouterKeys = getApiKeys('openrouter');
 
     const isKa = state.getCurrentLanguage() === 'ka';
 
-    const updateBadge = (badge: HTMLElement | null, key: string) => {
+    const updateBadge = (badge: HTMLElement | null, keys: string[]) => {
         if (!badge) return;
-        if (key && key.trim()) {
-            badge.textContent = isKa ? '✅ აქტიურია' : '✅ Activo';
+        if (keys.length > 0) {
+            badge.textContent = isKa
+                ? (keys.length > 1 ? `✅ აქტიურია (${keys.length} გასაღები)` : '✅ აქტიურია')
+                : (keys.length > 1 ? `✅ Activo (${keys.length} claves)` : '✅ Activo');
             badge.style.background = '#e6f7ed';
             badge.style.color = '#0e8a3a';
         } else {
@@ -244,9 +269,9 @@ export function openApiSettingsModal() {
         }
     };
 
-    updateBadge(geminiBadge, geminiKey);
-    updateBadge(groqBadge, groqKey);
-    updateBadge(openrouterBadge, openrouterKey);
+    updateBadge(geminiBadge, geminiKeys);
+    updateBadge(groqBadge, groqKeys);
+    updateBadge(openrouterBadge, openrouterKeys);
 
     if (geminiInput) geminiInput.value = localStorage.getItem('GEMINI_API_KEY') || '';
     if (groqInput) groqInput.value = localStorage.getItem('GROQ_API_KEY') || '';
@@ -270,7 +295,7 @@ export function addDelegatedEventListeners() {
     addViewsEventListeners();
 
     // Global listener for API settings modal buttons and error triggers
-    document.body.addEventListener('click', (e) => {
+    document.body.addEventListener('click', async (e) => {
         const target = e.target as HTMLElement;
         if (target.closest('.open-api-settings-btn, #mobile-menu-api-settings')) {
             openApiSettingsModal();
@@ -284,17 +309,68 @@ export function addDelegatedEventListeners() {
             const geminiInput = document.getElementById('gemini-key-input') as HTMLInputElement | null;
             const groqInput = document.getElementById('groq-key-input') as HTMLInputElement | null;
             const openrouterInput = document.getElementById('openrouter-key-input') as HTMLInputElement | null;
+            const prefSelect = document.getElementById('preferred-provider-select') as HTMLSelectElement | null;
 
             if (geminiInput) saveApiKeyToStorage('gemini', geminiInput.value.trim());
             if (groqInput) saveApiKeyToStorage('groq', groqInput.value.trim());
             if (openrouterInput) saveApiKeyToStorage('openrouter', openrouterInput.value.trim());
+            if (prefSelect) setPreferredProvider(prefSelect.value as ProviderPreference);
 
+            updateDesktopApiStatusDot();
             closeApiSettingsModal();
             const isKa = state.getCurrentLanguage() === 'ka';
             utils.showAlertModal(
                 isKa ? "პარამეტრები შენახულია" : "Configuración Guardada",
-                isKa ? "API გასაღებები წარმატებით შეინახა ბრაუზერში!" : "¡Las claves API se guardaron correctamente en el navegador!"
+                isKa ? "API გასაღებები და პრიორიტეტი წარმატებით შეინახა ბრაუზერში!" : "¡Las claves API y la prioridad se guardaron correctamente en el navegador!"
             );
+            return;
+        }
+        if (target.matches('#api-settings-test-btn')) {
+            const testBtn = target as HTMLButtonElement;
+            const testResultEl = document.getElementById('api-settings-test-result') as HTMLDivElement | null;
+            const isKa = state.getCurrentLanguage() === 'ka';
+
+            testBtn.disabled = true;
+            testBtn.textContent = isKa ? 'მოწმდება... ⏳' : 'Probando... ⏳';
+            if (testResultEl) {
+                testResultEl.style.display = 'block';
+                testResultEl.style.background = '#f0f4ff';
+                testResultEl.style.color = '#1a365d';
+                testResultEl.textContent = isKa ? 'მიმდინარეობს პროვაიდერების სისწრაფის გაზომვა...' : 'Midiendo velocidad de proveedores...';
+            }
+
+            try {
+                const results = await testApiSpeed();
+                if (results.length === 0) {
+                    if (testResultEl) {
+                        testResultEl.style.background = '#fff4e5';
+                        testResultEl.style.color = '#d97706';
+                        testResultEl.textContent = isKa
+                            ? '⚠️ არცერთი API გასაღები არ არის მითითებული. გთხოვთ ჩაწეროთ გასაღები და დააჭიროთ შენახვას.'
+                            : '⚠️ No hay claves configuradas. Ingrese una clave y haga clic en Guardar.';
+                    }
+                } else {
+                    const html = results.map(r => {
+                        const icon = r.success ? '✅' : '❌';
+                        const color = r.success ? '#0e8a3a' : '#d93025';
+                        return `<div style="margin-bottom: 2px;"><strong>${icon} ${r.provider}:</strong> <span style="color: ${color}; font-weight: 600;">${r.message}</span></div>`;
+                    }).join('');
+                    if (testResultEl) {
+                        testResultEl.style.background = '#f6fdf9';
+                        testResultEl.style.color = '#111';
+                        testResultEl.innerHTML = html;
+                    }
+                }
+            } catch (err: any) {
+                if (testResultEl) {
+                    testResultEl.style.background = '#fef2f2';
+                    testResultEl.style.color = '#d93025';
+                    testResultEl.textContent = `შეცდომა: ${err?.message || err}`;
+                }
+            } finally {
+                testBtn.disabled = false;
+                testBtn.textContent = isKa ? '⚡ ტესტი' : '⚡ Probar';
+            }
             return;
         }
         if (target.matches('#api-settings-clear-btn')) {
@@ -307,6 +383,7 @@ export function addDelegatedEventListeners() {
             if (geminiInput) geminiInput.value = '';
             if (groqInput) groqInput.value = '';
             if (openrouterInput) openrouterInput.value = '';
+            updateDesktopApiStatusDot();
             openApiSettingsModal(); // refresh badges
             return;
         }

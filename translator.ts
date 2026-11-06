@@ -306,16 +306,78 @@ async function translateText(sourceHtml: string) {
     fullscreenBtn.hidden = true;
 
     try {
-        const sourceLangName = t[state.getTranslatorSourceLang() === 'es' ? 'spanish' : 'georgian'];
-        const targetLangName = t[state.getTranslatorTargetLang() === 'es' ? 'spanish' : 'georgian'];
-        let prompt = `Translate the following text from ${sourceLangName} to ${targetLangName}. Preserve the original HTML formatting (like <b>, <i>, <ul>, <li>). Only translate the text content. Text to translate: \n\n${sourceHtml}`;
-        if (state.getSimplifyTranslation()) {
-            prompt += `\n\nIMPORTANT: Translate the text into simple, easy-to-understand language, suitable for a beginner learning the target language.`;
+        const tempEl = document.createElement('div');
+        tempEl.innerHTML = sourceHtml;
+        const textOnly = tempEl.innerText.trim();
+
+        // ენის ავტომატური ამოცნობა: თუ ტექსტი შეიცავს ქართულ ანბანს
+        const hasGeorgian = /[\u10A0-\u10FF]/.test(textOnly);
+        const hasLatin = /[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ]/.test(textOnly);
+
+        let fromLangCode = state.getTranslatorSourceLang();
+        let toLangCode = state.getTranslatorTargetLang();
+
+        if (hasGeorgian && (!hasLatin || fromLangCode === 'es')) {
+            // შეყვანილია ქართული ტექსტი -> ვთარგმნით ესპანურად!
+            fromLangCode = 'ka';
+            toLangCode = 'es';
+            state.setTranslatorSourceLang('ka');
+            state.setTranslatorTargetLang('es');
+        } else if (hasLatin && !hasGeorgian && fromLangCode === 'ka') {
+            // შეყვანილია ესპანური ტექსტი -> ვთარგმნით ქართულად!
+            fromLangCode = 'es';
+            toLangCode = 'ka';
+            state.setTranslatorSourceLang('es');
+            state.setTranslatorTargetLang('ka');
         }
-        
-        const fullTranslatedText = await gemini.fetchTranslation(prompt);
+
+        // ვაახლებთ ენის ღილაკების ტექსტს ინტერფეისში
+        const sourceLangBtn = document.getElementById('source-lang-btn');
+        const targetLangBtn = document.getElementById('target-lang-btn');
+        if (sourceLangBtn) sourceLangBtn.textContent = t[fromLangCode === 'es' ? 'spanish' : 'georgian'];
+        if (targetLangBtn) targetLangBtn.textContent = t[toLangCode === 'es' ? 'spanish' : 'georgian'];
+
+        const fromLangEnglish = fromLangCode === 'ka' ? 'Georgian' : 'Spanish';
+        const toLangEnglish = toLangCode === 'ka' ? 'Georgian' : 'Spanish';
+
+        let prompt = `You are a professional high-accuracy translator. Translate the text below strictly from ${fromLangEnglish} into ${toLangEnglish}.
+CRITICAL RULES:
+1. The translation MUST be strictly in ${toLangEnglish}. NEVER echo or repeat the source ${fromLangEnglish} text.
+2. Preserve any HTML formatting tags (<b>, <i>, <ul>, <ol>, <li>, <br>, <p>) exactly, translating only the inner text.
+3. Output ONLY the translated text/HTML. Do not include markdown code blocks, prefixes, or notes.
+
+Text to translate:
+${sourceHtml}`;
+
+        if (state.getSimplifyTranslation()) {
+            prompt += `\n\nIMPORTANT: Use simple, easy-to-understand vocabulary suitable for a beginner.`;
+        }
+
+        let fullTranslatedText = await gemini.fetchTranslation(prompt);
+
+        // Markdown wrapper-ის გასუფთავება
+        let cleaned = fullTranslatedText.trim();
+        const codeBlock = cleaned.match(/^```(?:html)?\s*([\s\S]*?)\s*```$/i);
+        if (codeBlock && codeBlock[1]) {
+            cleaned = codeBlock[1].trim();
+        }
+
+        // შემოწმება: თუ ქართულიდან ესპანურად ითარგმნებოდა და პასუხი ისევ ქართულად დაბრუნდა
+        if (fromLangCode === 'ka' && toLangCode === 'es') {
+            const hasGeorgianResult = /[\u10A0-\u10FF]/.test(cleaned);
+            const hasSpanishResult = /[a-zA-Z]/.test(cleaned);
+            if (hasGeorgianResult && !hasSpanishResult) {
+                console.warn("მოდელმა დააბრუნა ქართული ტექსტი. ხდება მომენტალური ხელახალი თარგმნა პირდაპირი ინსტრუქციით...");
+                const retryPrompt = `Translate the following Georgian text into Spanish language only. Do NOT output Georgian.\nGeorgian:\n${textOnly}`;
+                cleaned = await gemini.fetchTranslation(retryPrompt);
+                const retryCode = cleaned.match(/^```(?:html)?\s*([\s\S]*?)\s*```$/i);
+                if (retryCode && retryCode[1]) cleaned = retryCode[1].trim();
+            }
+        }
+
+        fullTranslatedText = cleaned;
         targetDiv.innerHTML = fullTranslatedText;
-        
+
         if (fullTranslatedText.trim().length > 0) {
             const newHistoryItem = storage.addTranslationToHistory({
                 sourceLang: state.getTranslatorSourceLang(),

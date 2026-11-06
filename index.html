@@ -88,6 +88,8 @@
                  <img src="https://i.postimg.cc/c1T2NJgV/avma.png" alt="AVMA Logo" class="footer-logo">
                  <span class="footer-decorator right"></span>
                  <div class="footer-right">
+                    <button type="button" class="footer-link open-api-settings-btn" id="footer-api-settings-btn">⚙️ API პარამეტრები</button>
+                    <span class="footer-separator">|</span>
                     <a href="https://github.com/TemuriCh/Tradicon" target="_blank" rel="noopener noreferrer" id="footer-materials-link">Auxiliary Materials</a>
                     <span class="footer-separator">|</span>
                     <button class="footer-link" id="footer-about-btn" data-view="about">About the app</button>
@@ -252,41 +254,58 @@
 
     <!-- API Settings Modal -->
     <div id="api-settings-modal" class="modal-overlay" hidden>
-        <div class="modal-content" style="max-width: 480px; width: 92%;">
+        <div class="modal-content" style="max-width: 500px; width: 94%; max-height: 90vh; overflow-y: auto;">
             <button id="api-settings-close-btn" class="modal-close" aria-label="Close">&times;</button>
-            <h2 id="api-settings-title" style="margin-bottom: 0.5rem; font-size: 1.3rem;">API გასაღებების მართვა</h2>
-            <p id="api-settings-subtitle" style="font-size: 0.85rem; color: #555; margin-bottom: 1.25rem; line-height: 1.4;">
-                თუ Gemini გადატვირთულია (503 High Demand), სისტემა <b>წამების მეასედში</b> ავტომატურად გადადის Groq (Llama 3.3) ან OpenRouter-ზე.
+            <h2 id="api-settings-title" style="margin-bottom: 0.35rem; font-size: 1.3rem;">⚙️ API გასაღებები & ლიმიტები</h2>
+            <p id="api-settings-subtitle" style="font-size: 0.82rem; color: #555; margin-bottom: 1rem; line-height: 1.4;">
+                ლიმიტების გასაზრდელად შეგიძლიათ ჩაწეროთ რამდენიმე გასაღები მძიმით გამოყოფილი (<code style="background: #eee; padding: 1px 4px; border-radius: 3px;">key1, key2</code>). თუ ერთი ამოიწურება, ავტომატურად გადავა მეორეზე.
             </p>
 
-            <div style="display: flex; flex-direction: column; gap: 1rem;">
+            <div style="display: flex; flex-direction: column; gap: 0.9rem;">
                 <div class="api-key-field">
-                    <div style="font-weight: 600; font-size: 0.85rem; display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
-                        <span>Google Gemini Key</span>
-                        <span id="gemini-status-badge" style="font-size: 0.75rem; padding: 2px 6px; border-radius: 4px; background: #eef; color: #33a;">შემოწმება...</span>
-                    </div>
-                    <input type="password" id="gemini-key-input" placeholder="AIzaSy... (ან Vercel Env)" style="width: 100%; padding: 0.55rem; border-radius: 8px; border: 1px solid #ccc; font-family: monospace; font-size: 0.85rem; box-sizing: border-box;">
+                    <label style="font-weight: 600; font-size: 0.85rem; display: block; margin-bottom: 0.25rem;">
+                        <span>პირველადი პროვაიდერი / რეჟიმი:</span>
+                    </label>
+                    <select id="preferred-provider-select" style="width: 100%; padding: 0.5rem; border-radius: 8px; border: 1px solid #ccc; font-size: 0.85rem; background: #fff; cursor: pointer;">
+                        <option value="groq">⚡ Groq LPU (Llama 3.3 70B - ულტრა-სწრაფი 0.2 წმ, რეკომენდებული)</option>
+                        <option value="auto">🔄 ავტომატური (Smart Pool: Groq ➔ Gemini ➔ OpenRouter)</option>
+                        <option value="gemini">✨ Google Gemini 3.8 Flash (Timeout: 4.5 წმ)</option>
+                        <option value="openrouter">🌐 OpenRouter (უფასო ალტერნატივა)</option>
+                    </select>
                 </div>
 
                 <div class="api-key-field">
                     <div style="font-weight: 600; font-size: 0.85rem; display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
-                        <span>Groq Key (რეკომენდებული - 0.2 წმ)</span>
+                        <span>⚡ Groq Key(s) — <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer" style="color: var(--primary-color); text-decoration: underline;">უფასო გასაღები</a></span>
                         <span id="groq-status-badge" style="font-size: 0.75rem; padding: 2px 6px; border-radius: 4px; background: #eef; color: #33a;">შემოწმება...</span>
                     </div>
-                    <input type="password" id="groq-key-input" placeholder="gsk_... (უფასო console.groq.com/keys)" style="width: 100%; padding: 0.55rem; border-radius: 8px; border: 1px solid #ccc; font-family: monospace; font-size: 0.85rem; box-sizing: border-box;">
+                    <input type="password" id="groq-key-input" placeholder="gsk_... (ან რამდენიმე: key1, key2)" style="width: 100%; padding: 0.55rem; border-radius: 8px; border: 1px solid #ccc; font-family: monospace; font-size: 0.85rem; box-sizing: border-box;">
+                    <span style="font-size: 0.73rem; color: #666; display: block; margin-top: 2px;">⚡ LPU ინფერენსი: პასუხი 0.2 წამში (არ ჭედავს და არ აგვიანებს).</span>
                 </div>
 
                 <div class="api-key-field">
                     <div style="font-weight: 600; font-size: 0.85rem; display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
-                        <span>OpenRouter Key</span>
-                        <span id="openrouter-status-badge" style="font-size: 0.75rem; padding: 2px 6px; border-radius: 4px; background: #eef; color: #33a;">შემოწმება...</span>
+                        <span>✨ Google Gemini Key(s) — <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer" style="color: var(--primary-color); text-decoration: underline;">AI Studio</a></span>
+                        <span id="gemini-status-badge" style="font-size: 0.75rem; padding: 2px 6px; border-radius: 4px; background: #eef; color: #33a;">შემოწმება...</span>
                     </div>
-                    <input type="password" id="openrouter-key-input" placeholder="sk-or-... (openrouter.ai/keys)" style="width: 100%; padding: 0.55rem; border-radius: 8px; border: 1px solid #ccc; font-family: monospace; font-size: 0.85rem; box-sizing: border-box;">
+                    <input type="password" id="gemini-key-input" placeholder="AIzaSy... (ან Vercel Env, ან: key1, key2)" style="width: 100%; padding: 0.55rem; border-radius: 8px; border: 1px solid #ccc; font-family: monospace; font-size: 0.85rem; box-sizing: border-box;">
+                    <span style="font-size: 0.73rem; color: #666; display: block; margin-top: 2px;">⏱️ ავტომატური 4.5 წმ ტაიმაუტი: თუ Gemini გადაიტვირთა, მომენტალურად გადადის Groq-ზე.</span>
                 </div>
 
-                <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
-                    <button type="button" id="api-settings-save-btn" class="main-action-btn" style="flex: 1; padding: 0.65rem; background: var(--primary-color); color: #fff; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">შენახვა</button>
-                    <button type="button" id="api-settings-clear-btn" class="main-action-btn" style="padding: 0.65rem 1rem; background: #eee; color: #333; border: none; border-radius: 8px; font-weight: 500; cursor: pointer;">გასუფთავება</button>
+                <div class="api-key-field">
+                    <div style="font-weight: 600; font-size: 0.85rem; display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                        <span>🌐 OpenRouter Key(s) — <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" style="color: var(--primary-color); text-decoration: underline;">OpenRouter</a></span>
+                        <span id="openrouter-status-badge" style="font-size: 0.75rem; padding: 2px 6px; border-radius: 4px; background: #eef; color: #33a;">შემოწმება...</span>
+                    </div>
+                    <input type="password" id="openrouter-key-input" placeholder="sk-or-... (ან: key1, key2)" style="width: 100%; padding: 0.55rem; border-radius: 8px; border: 1px solid #ccc; font-family: monospace; font-size: 0.85rem; box-sizing: border-box;">
+                </div>
+
+                <div id="api-settings-test-result" style="font-size: 0.82rem; padding: 0.4rem 0.6rem; border-radius: 6px; display: none;"></div>
+
+                <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem; flex-wrap: wrap;">
+                    <button type="button" id="api-settings-save-btn" class="main-action-btn" style="flex: 2; min-width: 120px; padding: 0.65rem; background: var(--primary-color); color: #fff; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">შენახვა</button>
+                    <button type="button" id="api-settings-test-btn" class="main-action-btn" style="flex: 1; min-width: 100px; padding: 0.65rem; background: #0eb93f; color: #fff; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">⚡ ტესტი</button>
+                    <button type="button" id="api-settings-clear-btn" class="main-action-btn" style="padding: 0.65rem 0.9rem; background: #eee; color: #333; border: none; border-radius: 8px; font-weight: 500; cursor: pointer;">გასუფთავება</button>
                 </div>
             </div>
         </div>
